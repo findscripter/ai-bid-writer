@@ -42,12 +42,48 @@ export interface ChapterContentRequest {
   parent_chapters?: OutlineItem[];
   sibling_chapters?: OutlineItem[];
   project_overview: string;
+  target_words?: number;
+  persona?: string;
+  prior_summaries?: { copy_index: string; summary: string }[];
 }
+
+export interface Persona {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface MultiCopyContentRequest {
+  outline: { outline: OutlineItem[] };
+  project_overview: string;
+  target_pages: number;
+  extended_target_pages?: number;
+  words_per_page?: number;
+  copies: number;
+  personas?: Persona[];
+  inject_response_chapters?: boolean;
+  parallel_concurrency?: number;
+  models?: string[];
+}
+
+export type MultiCopyEvent =
+  | { type: 'meta'; leaf_count: number; total_leaf_count?: number; copies: number; target_pages: number; extended_target_pages?: number | null; words_per_page: number; personas: Persona[]; injected_response_chapters?: boolean; parallel_concurrency?: number; copies_plan?: { copy_index: number; leaf_count: number; is_extended?: boolean; target_pages?: number; persona?: Persona | null; variant_failed?: boolean; model?: string; }[]; }
+  | { type: 'copy_start'; copy_index: number; persona: Persona | null; is_extended?: boolean; target_pages?: number; leaf_count?: number; outline?: OutlineItem[]; variant_failed?: boolean; model?: string; }
+  | { type: 'chapter_start'; copy_index: number; chapter_id: string; title: string; target_words: number | null; persona_id: string | null; is_response_chapter?: boolean; }
+  | { type: 'chapter_chunk'; copy_index: number; chapter_id: string; delta: string; }
+  | { type: 'chapter_end'; copy_index: number; chapter_id: string; content: string; char_count: number; error?: boolean; }
+  | { type: 'copy_end'; copy_index: number; }
+  | { type: 'all_done'; }
+  | { error: true; message?: string; };
 
 export interface WordExportRequest {
   project_name?: string;
   project_overview?: string;
   outline: OutlineItem[];
+  copy_index?: number;
+  persona_name?: string;
+  with_diagrams?: boolean;
+  diagram_model?: string;
 }
 
 export interface StreamEvent {
@@ -243,6 +279,49 @@ export const outlineApi = {
 export const contentApi = {
   generateChapterContent: (data: ChapterContentRequest) => api.post<{ success: boolean; content: string }>('/api/content/generate-chapter', data),
   generateChapterContentStream: (data: ChapterContentRequest) => postJson('/api/content/generate-chapter-stream', data),
+  generateMultiCopiesStream: (data: MultiCopyContentRequest) => postJson('/api/content/generate-multi-copies', data),
+  getPersonas: () => api.get<{ personas: Persona[] }>('/api/content/personas'),
+};
+
+export const readMultiCopySseStream = async (
+  response: Response,
+  onEvent: (event: MultiCopyEvent) => void,
+  fallbackMessage = '多份生成失败'
+): Promise<void> => {
+  await ensureResponseOk(response, fallbackMessage);
+  const reader = response.body?.getReader();
+  if (!reader) {
+    throw new Error('无法读取响应流');
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split('\n\n');
+    buffer = events.pop() || '';
+
+    for (const block of events) {
+      const dataLine = block.split('\n').find((line) => line.startsWith('data: '));
+      if (!dataLine) {
+        continue;
+      }
+      const data = dataLine.slice(6);
+      if (data === '[DONE]') {
+        return;
+      }
+      try {
+        onEvent(JSON.parse(data) as MultiCopyEvent);
+      } catch {
+        // 忽略不完整片段
+      }
+    }
+  }
 };
 
 export const expandApi = {

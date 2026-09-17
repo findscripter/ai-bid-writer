@@ -1,4 +1,5 @@
 """标书解析服务。"""
+from __future__ import annotations
 
 from typing import AsyncGenerator
 

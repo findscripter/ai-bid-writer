@@ -1,4 +1,5 @@
 """模型查询服务。"""
+from __future__ import annotations
 
 from typing import List
 

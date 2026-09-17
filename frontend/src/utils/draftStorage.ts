@@ -8,8 +8,8 @@
 
 import type { AppState, OutlineItem } from '../types';
 
-const DRAFT_KEY = 'yibiao:draft:v1';
-const CONTENT_BY_ID_KEY = 'yibiao:contentById:v1';
+const DRAFT_KEY = 'ai-bid:draft:v1';
+const CONTENT_BY_ID_KEY = 'ai-bid:contentById:v1';
 
 export type DraftState = Pick<
   AppState,

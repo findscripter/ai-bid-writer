@@ -1,4 +1,5 @@
 """OpenAI 调用公共工具。"""
+from __future__ import annotations
 
 import json
 import logging
@@ -22,11 +23,14 @@ JsonValidator = Callable[[Dict[str, Any]], None]
 class OpenAIUtil:
     """封装 OpenAI SDK 调用、日志与 JSON 修复能力。"""
 
-    def __init__(self):
+    def __init__(self, model_name: str | None = None):
+        """model_name 可覆盖全局配置中的模型（用于多份生成时每份用不同模型）。"""
         config = config_manager.load_config()
         self.api_key = config.get("api_key", "")
         self.base_url = config.get("base_url", "")
-        self.model_name = config.get("model_name", "gpt-3.5-turbo")
+        self.model_name = (model_name or "").strip() or config.get(
+            "model_name", "gpt-3.5-turbo"
+        )
         if not self.api_key:
             raise AppError("请先配置OpenAI API密钥", status_code=400)
         self.client = openai.AsyncOpenAI(
@@ -228,29 +232,51 @@ class OpenAIUtil:
         raw_chunks: list[dict[str, Any]] = []
         self._log_ai_request(request_id, messages, temperature, response_format)
 
+        extra: dict[str, Any] = (
+            {"response_format": response_format} if response_format is not None else {}
+        )
         try:
             stream = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=messages,
                 temperature=temperature,
                 stream=True,
-                **(
-                    {"response_format": response_format}
-                    if response_format is not None
-                    else {}
-                ),
+                **extra,
             )
         except Exception as exc:
-            self._log_ai_error(
-                request_id,
-                messages,
-                temperature,
-                response_format,
-                "",
-                raw_chunks,
-                exc,
-            )
-            raise AppError(f"模型调用失败: {exc}", status_code=502) from exc
+            # 部分模型（如 GPT-5 系）不接受自定义 temperature，去掉后重试一次
+            if "temperature" in str(exc).lower():
+                try:
+                    stream = await self.client.chat.completions.create(
+                        model=self.model_name,
+                        messages=messages,
+                        stream=True,
+                        **extra,
+                    )
+                except Exception as retry_exc:
+                    self._log_ai_error(
+                        request_id,
+                        messages,
+                        temperature,
+                        response_format,
+                        "",
+                        raw_chunks,
+                        retry_exc,
+                    )
+                    raise AppError(
+                        f"模型调用失败: {retry_exc}", status_code=502
+                    ) from retry_exc
+            else:
+                self._log_ai_error(
+                    request_id,
+                    messages,
+                    temperature,
+                    response_format,
+                    "",
+                    raw_chunks,
+                    exc,
+                )
+                raise AppError(f"模型调用失败: {exc}", status_code=502) from exc
 
         try:
             async for chunk in stream:

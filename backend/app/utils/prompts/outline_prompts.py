@@ -1,4 +1,5 @@
 """目录生成相关提示词。"""
+from __future__ import annotations
 
 from typing import Any, Dict, List
 
@@ -14,7 +15,11 @@ def _build_outline_system_prompt() -> str:
 3. 一级目录名称要与技术评分要求中的章节名称一致；如果技术评分要求中没有明确章节名称，则结合内容总结一级目录名称
 4. 一共包括三级目录
 5. 返回标准 JSON 格式，包含章节编号、标题、描述和子章节
-6. 除了 JSON 结果外，不要输出任何其他内容
+6. 每个章节 description 必须包含“映射标签”，格式：
+   "对应评审项: E1,E2; 对应采购要求: R3,R7"
+   - 若无法判断，写“对应评审项: 未提及; 对应采购要求: 未提及”
+7. 技术标目录与内容必须能与采购文件的“评审表”“采购人要求”对应，不能遗漏这两类要点
+8. 除了 JSON 结果外，不要输出任何其他内容
 
 JSON 格式要求：
 {
@@ -22,17 +27,17 @@ JSON 格式要求：
     {
       "id": "1",
       "title": "",
-      "description": "",
+      "description": "对应评审项: E1; 对应采购要求: R1,R2",
       "children": [
         {
           "id": "1.1",
           "title": "",
-          "description": "",
+          "description": "对应评审项: E2; 对应采购要求: R3",
           "children": [
             {
               "id": "1.1.1",
               "title": "",
-              "description": ""
+              "description": "对应评审项: E2; 对应采购要求: R3"
             }
           ]
         }
@@ -348,9 +353,13 @@ def review_outline_messages(
 1. 重点检查目录是否完整覆盖技术评分要点
 2. 检查一级目录名称是否专业、准确，是否尽量与评分项原文保持一致
 3. 检查目录层级是否清晰，是否达到三级目录要求，是否存在明显遗漏、错位、重复或不合理章节
-4. 只返回 JSON，格式为：{"passed": true, "suggestions": []}
-5. 若不通过，suggestions 中必须给出具体、可执行的修改建议
-6. 除了 JSON 外，不要输出任何其他内容
+4. 必须检查“评审表 + 采购人要求”双映射：
+   - 每个关键章节 description 必须带映射标签：对应评审项(E*)、对应采购要求(R*)
+   - 若评审表有条目未被任何章节覆盖，判不通过
+   - 若采购人要求有条目未被任何章节覆盖，判不通过
+5. 只返回 JSON，格式为：{"passed": true, "suggestions": []}
+6. 若不通过，suggestions 中必须给出具体、可执行的修改建议，并明确缺失的 E*/R* 编号
+7. 除了 JSON 外，不要输出任何其他内容
 """
 
     return [
@@ -379,9 +388,12 @@ def review_aligned_outline_messages(
 2. 不允许缺失技术评分大类，也不允许新增、合并、改写一级目录
 3. 二级和三级目录要围绕各自对应的技术评分大类与细项展开，避免错位、遗漏和明显重复
 4. 检查完整目录是否层级清晰，整体是否达到三级目录要求
-5. 只返回 JSON，格式为：{"passed": true, "suggestions": []}
-6. 若不通过，suggestions 中必须给出具体、可执行的修改建议，重点说明哪个评分大类覆盖不足或结构不合理
-7. 除了 JSON 外，不要输出任何其他内容
+5. 必须检查“采购人要求”是否被目录覆盖（不仅是评审项）：
+   - 关键章节 description 需包含“对应采购要求: R*”映射标签
+   - 若采购人要求条目存在未覆盖，判不通过
+6. 只返回 JSON，格式为：{"passed": true, "suggestions": []}
+7. 若不通过，suggestions 中必须给出具体、可执行的修改建议，重点说明哪个评分大类或采购要求覆盖不足
+8. 除了 JSON 外，不要输出任何其他内容
 """
 
     return [
@@ -393,5 +405,86 @@ def review_aligned_outline_messages(
         {
             "role": "user",
             "content": "请判断该目录是否满足一一对应要求。若满足则返回 passed=true；若不满足则返回 passed=false，并给出具体修改建议。",
+        },
+    ]
+
+
+def _format_avoid_structures(avoid_top_titles: List[List[str]] | None) -> str:
+    """把已使用过的结构（每份的一级标题列表）格式化为"必须避开"的清单。"""
+    if not avoid_top_titles:
+        return "（暂无，本份是第一个变体，自由组织即可，但必须与原目录结构明显不同。）"
+    lines: List[str] = []
+    for idx, titles in enumerate(avoid_top_titles, start=1):
+        joined = " / ".join(t for t in titles if t)
+        lines.append(f"已用结构 {idx}：{joined}")
+    return "\n".join(lines)
+
+
+def generate_outline_variant_prompt(
+    base_outline_json: str,
+    overview: str,
+    avoid_top_titles: List[List[str]] | None = None,
+    variant_index: int = 1,
+    persona_desc: str | None = None,
+) -> List[Dict[str, str]]:
+    """生成"目录结构变体"提示词。
+
+    在覆盖与基准目录完全相同主题范围与技术要点的前提下，用一套明显不同的
+    组织结构重新编排目录，且必须与所有"已用结构"不同。用于多份标书每份目录不雷同。
+    """
+    system_prompt = """你是一个专业的标书目录重构专家。给你一份已确认的技术标目录，请在覆盖完全相同的主题范围与技术要点的前提下，用一套明显不同的章节组织结构重新编排出一份新目录。
+
+硬性要求：
+1. 信息无损：基准目录涉及的所有技术要点、功能模块、采购/评审映射都必须被新目录覆盖，不得遗漏任何要点，也不要新增无关内容。
+2. 结构明显不同：必须更换一级目录的划分维度（例如在"系统分层 / 建设阶段 / 功能模块 / 技术专题 / 实施流程"等不同维度之间切换），重写一级目录标题措辞，并对二、三级目录重新归类、合并或拆分；不允许只是调换顺序或改几个字。
+3. 必须与下方列出的所有"已用结构"都不同：一级目录标题不得雷同，整体组织维度不得雷同。
+4. 保持三级目录结构，编号从 1 开始规范编号（1、1.1、1.1.1 ……）。
+5. 每个章节 description 保留映射标签，格式："对应评审项: E1,E2; 对应采购要求: R3"，无法判断则写"对应评审项: 未提及; 对应采购要求: 未提及"。
+6. 只返回标准 JSON，格式为 {"outline": [...]}，不要输出正文、解释或任何其他内容。
+
+JSON 格式要求：
+{
+  "outline": [
+    {
+      "id": "1",
+      "title": "",
+      "description": "对应评审项: E1; 对应采购要求: R1",
+      "children": [
+        {
+          "id": "1.1",
+          "title": "",
+          "description": "对应评审项: E2; 对应采购要求: R3",
+          "children": [
+            {"id": "1.1.1", "title": "", "description": "对应评审项: E2; 对应采购要求: R3"}
+          ]
+        }
+      ]
+    }
+  ]
+}
+"""
+
+    persona_clause = ""
+    if persona_desc and persona_desc.strip():
+        persona_clause = (
+            f"\n\n本份标书的风格定位（可据此选择更契合的组织视角）：\n{persona_desc.strip()}"
+        )
+
+    return [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"项目概述：\n{overview}"},
+        {"role": "user", "content": f"基准目录（需覆盖其全部要点，但要重构结构）JSON：\n{base_outline_json}"},
+        {
+            "role": "user",
+            "content": "必须避开的已用结构（新目录的一级标题与组织维度都要与它们明显不同）：\n"
+            + _format_avoid_structures(avoid_top_titles),
+        },
+        {
+            "role": "user",
+            "content": (
+                f"这是第 {variant_index + 1} 份标书的目录。请输出一份与基准目录主题范围一致、"
+                f"但章节组织结构明显不同的全新三级目录，返回格式必须是 {{\"outline\": [...]}}。"
+                + persona_clause
+            ),
         },
     ]

@@ -350,20 +350,20 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
 
     return (
       <div key={item.id} className={`${level > 0 ? 'ml-6' : ''}`}>
-        <div className="group flex items-start space-x-2 py-2 hover:bg-gray-50 rounded px-2">
+        <div className="group flex items-start space-x-2 py-2 hover:bg-slate-50 rounded px-2">
           {hasChildren ? (
             <button
               onClick={() => toggleExpanded(item.id)}
-              className="mt-1 p-0.5 rounded hover:bg-gray-200"
+              className="mt-1 p-0.5 rounded hover:bg-slate-200"
             >
               {isExpanded ? (
-                <ChevronDownIcon className="h-4 w-4 text-gray-400" />
+                <ChevronDownIcon className="h-4 w-4 text-slate-400" />
               ) : (
-                <ChevronRightIcon className="h-4 w-4 text-gray-400" />
+                <ChevronRightIcon className="h-4 w-4 text-slate-400" />
               )}
             </button>
           ) : (
-            <DocumentTextIcon className="mt-1 h-4 w-4 text-gray-400" />
+            <DocumentTextIcon className="mt-1 h-4 w-4 text-slate-400" />
           )}
           
           <div className="flex-1 min-w-0">
@@ -374,26 +374,26 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
                   type="text"
                   value={editTitle}
                   onChange={(e) => setEditTitle(e.target.value)}
-                  className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                  className="w-full px-2 py-1 border border-slate-300 rounded text-sm"
                   placeholder="目录标题"
                 />
                 <textarea
                   value={editDescription}
                   onChange={(e) => setEditDescription(e.target.value)}
                   rows={2}
-                  className="w-full px-2 py-1 border border-gray-300 rounded text-xs resize-none"
+                  className="w-full px-2 py-1 border border-slate-300 rounded text-xs resize-none"
                   placeholder="目录描述"
                 />
                 <div className="flex space-x-2">
                   <button
                     onClick={saveEdit}
-                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-white bg-green-600 hover:bg-green-700"
+                    className="inline-flex items-center px-2 py-1 border border-transparent text-xs font-medium rounded text-white bg-primary-600 hover:bg-primary-700"
                   >
                     保存
                   </button>
                   <button
                     onClick={cancelEditing}
-                    className="inline-flex items-center px-2 py-1 border border-gray-300 text-xs font-medium rounded text-gray-700 bg-white hover:bg-gray-50"
+                    className="inline-flex items-center px-2 py-1 border border-slate-300 text-xs font-medium rounded text-slate-700 bg-white hover:bg-slate-50"
                   >
                     取消
                   </button>
@@ -405,9 +405,9 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <span className={`text-sm font-medium ${
-                      level === 0 ? 'text-blue-600' :
-                      level === 1 ? 'text-green-600' :
-                      'text-gray-700'
+                      level === 0 ? 'text-primary-700' :
+                      level === 1 ? 'text-slate-700' :
+                      'text-slate-500'
                     }`}>
                       {item.id} {item.title}
                     </span>
@@ -422,14 +422,14 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
                   <div className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button
                       onClick={() => startEditing(item)}
-                      className="p-1 rounded hover:bg-blue-100 text-blue-600"
+                      className="p-1 rounded hover:bg-primary-100 text-primary-600"
                       title="编辑"
                     >
                       <PencilIcon className="h-3 w-3" />
                     </button>
                     <button
                       onClick={() => addChildItem(item.id)}
-                      className="p-1 rounded hover:bg-green-100 text-green-600"
+                      className="p-1 rounded hover:bg-primary-50 text-primary-600"
                       title="添加子目录"
                     >
                       <PlusIcon className="h-3 w-3" />
@@ -443,12 +443,12 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
                     </button>
                   </div>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{item.description}</p>
+                <p className="text-xs text-slate-500 mt-1">{item.description}</p>
                 
                 {/* 显示生成的内容（如果有） */}
                 {item.content && isLeaf && (
-                  <div className="mt-2 p-3 bg-gray-50 rounded-md border-l-4 border-blue-200">
-                    <div className="text-xs text-gray-600 whitespace-pre-wrap">{item.content}</div>
+                  <div className="mt-2 p-3 bg-slate-50 rounded-md border-l-4 border-primary-200">
+                    <div className="text-xs text-slate-600 whitespace-pre-wrap">{item.content}</div>
                   </div>
                 )}
               </>
@@ -468,12 +468,12 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       {/* 操作按钮 */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">📋 目录管理</h2>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <h2 className="text-xl font-semibold text-slate-900 mb-4">📋 目录管理</h2>
         
         <div className="space-y-4">
           <div>
-            <p className="text-sm font-medium text-gray-700 mb-2">目录生成模式</p>
+            <p className="text-sm font-medium text-slate-700 mb-2">目录生成模式</p>
             <div className="grid gap-3 md:grid-cols-2">
               <button
                 type="button"
@@ -481,12 +481,12 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
                 disabled={generating}
                 className={`rounded-lg border px-4 py-3 text-left transition-colors ${
                   outlineMode === 'free'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                    ? 'border-primary-500 bg-primary-50 text-primary-700'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                 } disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 <div className="text-sm font-medium">AI自行理解</div>
-                <p className="mt-1 text-xs leading-5 text-gray-500">
+                <p className="mt-1 text-xs leading-5 text-slate-500">
                   AI 根据项目概述和技术评分要求自由组织一级目录。
                 </p>
               </button>
@@ -496,12 +496,12 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
                 disabled={generating}
                 className={`rounded-lg border px-4 py-3 text-left transition-colors ${
                   outlineMode === 'aligned'
-                    ? 'border-blue-500 bg-blue-50 text-blue-700'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                    ? 'border-primary-500 bg-primary-50 text-primary-700'
+                    : 'border-slate-200 bg-white text-slate-700 hover:border-slate-300'
                 } disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 <div className="text-sm font-medium">与技术评分项一一对应</div>
-                <p className="mt-1 text-xs leading-5 text-gray-500">
+                <p className="mt-1 text-xs leading-5 text-slate-500">
                   一级目录将严格按技术评分大类生成，标题和顺序固定，二三级目录由 AI 自动展开。
                 </p>
               </button>
@@ -521,11 +521,11 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
             />
             <label
               htmlFor="expand-file-upload"
-              className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white cursor-pointer ${
+              className={`inline-flex items-center px-4 py-2 border text-sm font-medium rounded-lg cursor-pointer ${
                 uploadedExpand
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-green-600 hover:bg-green-700'
-              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500`}
+                  ? 'border-transparent bg-slate-400 text-white cursor-not-allowed'
+                  : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+              } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500`}
             >
               {uploadedExpand ? (
                 <>
@@ -546,7 +546,7 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
           <button
             onClick={handleGenerateOutline}
             disabled={generating || !projectOverview || !techRequirements}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-slate-400"
           >
             {generating ? (
               <>
@@ -587,12 +587,12 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
 
         {/* 生成过程显示 */}
         {progressLogs.length > 0 && (
-          <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-md">
-            <h4 className="text-sm font-medium text-blue-800 mb-2">
+          <div className="mt-4 p-4 bg-primary-50 border border-primary-200 rounded-md">
+            <h4 className="text-sm font-medium text-primary-800 mb-2">
               {generating ? '正在生成目录结构...' : '本次生成过程'}
             </h4>
             <div className="bg-white p-3 rounded border max-h-48 overflow-y-auto">
-              <div className="space-y-2 text-xs text-gray-700">
+              <div className="space-y-2 text-xs text-slate-700">
                 {progressLogs.map((log, index) => (
                   <p key={`${index}-${log}`} className="whitespace-pre-wrap leading-5">
                     {log}
@@ -606,18 +606,18 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
 
       {/* 目录结构显示 */}
       {outlineData && (
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-medium text-gray-900">目录结构</h3>
+            <h3 className="text-lg font-medium text-slate-900">目录结构</h3>
             <button
               onClick={addRootItem}
-              className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+              className="inline-flex items-center px-3 py-1 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700"
             >
               <PlusIcon className="h-4 w-4 mr-1" />
               添加目录项
             </button>
           </div>
-          <div className="border rounded-lg p-4 max-h-96 overflow-y-auto">
+          <div className="border border-slate-200 rounded-lg p-4 max-h-96 overflow-y-auto">
             {outlineData.outline.map(item => renderOutlineItem(item))}
           </div>
         </div>

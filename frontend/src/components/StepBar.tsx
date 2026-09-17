@@ -29,7 +29,7 @@ const StepBar: React.FC<StepBarProps> = ({ steps, currentStep }) => {
               ) : index === currentStep ? (
                 <>
                   <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                    <div className="h-0.5 w-full bg-gray-200" />
+                    <div className="h-0.5 w-full bg-slate-200" />
                   </div>
                   <div className="relative w-8 h-8 flex items-center justify-center bg-white border-2 border-primary-600 rounded-full" aria-current="step">
                     <span className="h-2.5 w-2.5 bg-primary-600 rounded-full" aria-hidden="true" />
@@ -39,16 +39,16 @@ const StepBar: React.FC<StepBarProps> = ({ steps, currentStep }) => {
               ) : (
                 <>
                   <div className="absolute inset-0 flex items-center" aria-hidden="true">
-                    <div className="h-0.5 w-full bg-gray-200" />
+                    <div className="h-0.5 w-full bg-slate-200" />
                   </div>
-                  <div className="group relative w-8 h-8 flex items-center justify-center bg-white border-2 border-gray-300 rounded-full hover:border-gray-400">
-                    <span className="h-2.5 w-2.5 bg-transparent rounded-full group-hover:bg-gray-300" aria-hidden="true" />
+                  <div className="group relative w-8 h-8 flex items-center justify-center bg-white border-2 border-slate-300 rounded-full hover:border-slate-400">
+                    <span className="h-2.5 w-2.5 bg-transparent rounded-full group-hover:bg-slate-300" aria-hidden="true" />
                     <span className="sr-only">{step}</span>
                   </div>
                 </>
               )}
               <div className="absolute top-[-12] left-1/2 transform -translate-x-1/2 min-w-0 max-w-36 text-center px-2">
-                <span className={`text-sm font-medium whitespace-nowrap ${index <= currentStep ? 'text-primary-600' : 'text-gray-500'}`}>
+                <span className={`text-sm font-medium whitespace-nowrap ${index <= currentStep ? 'text-primary-600' : 'text-slate-500'}`}>
                   {step}
                 </span>
               </div>

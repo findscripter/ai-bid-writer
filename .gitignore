@@ -9,6 +9,14 @@ config.json
 uploads/
 *.docx
 *.pdf
+*.doc
+
+# 本地招标原件与一次性填空脚本，不入库
+文档/
+fill_template.py
+
+# PlantUML 引擎 jar（约 28MB，按 backend/tools/README.md 自行下载）
+*.jar
 
 # 构建和打包相关
 dist/

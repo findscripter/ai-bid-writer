@@ -1,4 +1,5 @@
 """目录相关 API 路由。"""
+from __future__ import annotations
 
 import asyncio
 import logging

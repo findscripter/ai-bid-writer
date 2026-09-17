@@ -150,7 +150,7 @@ def build_exe():
 
     # 构建exe - 使用更详细的参数，增加进程管理相关导入
     pyinstaller_cmd = (
-        'pyinstaller --onefile --name="yibiao-simple" '
+        'pyinstaller --onefile --name="ai-bid-writer" '
         '--add-data="backend;backend" '
         "--hidden-import=uvicorn --hidden-import=uvicorn.logging --hidden-import=uvicorn.loops "
         "--hidden-import=uvicorn.loops.auto --hidden-import=uvicorn.protocols "
@@ -205,7 +205,7 @@ def main():
 
     print("\n" + "=" * 50)
     print("构建完成！")
-    print("exe文件位于: dist/yibiao-simple.exe")
+    print("exe文件位于: dist/ai-bid-writer.exe")
     print("=" * 50)
 
     return True

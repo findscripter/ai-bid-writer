@@ -78,17 +78,17 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
     ul: ({ children }: any) => <ul className="mb-4 pl-5 space-y-1.5 list-disc">{children}</ul>,
     ol: ({ children }: any) => <ol className="mb-4 pl-5 space-y-1.5 list-decimal">{children}</ol>,
     li: ({ children }: any) => <li className="text-sm leading-relaxed">{children}</li>,
-    h1: ({ children }: any) => <h1 className="text-lg font-semibold mb-3 text-gray-900 border-b border-gray-200 pb-2">{children}</h1>,
-    h2: ({ children }: any) => <h2 className="text-base font-semibold mb-2 text-gray-900">{children}</h2>,
-    h3: ({ children }: any) => <h3 className="text-sm font-semibold mb-2 text-gray-800">{children}</h3>,
-    strong: ({ children }: any) => <strong className="font-semibold text-gray-900">{children}</strong>,
-    em: ({ children }: any) => <em className="italic text-gray-700">{children}</em>,
-    blockquote: ({ children }: any) => <blockquote className="border-l-4 border-green-200 pl-4 my-3 italic text-gray-600">{children}</blockquote>,
-    code: ({ children }: any) => <code className="bg-gray-100 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
-    table: ({ children }: any) => <table className="w-full border-collapse border border-gray-300 my-3">{children}</table>,
-    thead: ({ children }: any) => <thead className="bg-gray-50">{children}</thead>,
-    th: ({ children }: any) => <th className="border border-gray-300 px-3 py-2 text-left font-semibold text-xs">{children}</th>,
-    td: ({ children }: any) => <td className="border border-gray-300 px-3 py-2 text-xs">{children}</td>,
+    h1: ({ children }: any) => <h1 className="text-lg font-semibold mb-3 text-slate-900 border-b border-slate-200 pb-2">{children}</h1>,
+    h2: ({ children }: any) => <h2 className="text-base font-semibold mb-2 text-slate-900">{children}</h2>,
+    h3: ({ children }: any) => <h3 className="text-sm font-semibold mb-2 text-slate-800">{children}</h3>,
+    strong: ({ children }: any) => <strong className="font-semibold text-slate-900">{children}</strong>,
+    em: ({ children }: any) => <em className="italic text-slate-700">{children}</em>,
+    blockquote: ({ children }: any) => <blockquote className="border-l-4 border-primary-200 pl-4 my-3 italic text-slate-600">{children}</blockquote>,
+    code: ({ children }: any) => <code className="bg-slate-100 px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+    table: ({ children }: any) => <table className="w-full border-collapse border border-slate-300 my-3">{children}</table>,
+    thead: ({ children }: any) => <thead className="bg-slate-50">{children}</thead>,
+    th: ({ children }: any) => <th className="border border-slate-300 px-3 py-2 text-left font-semibold text-xs">{children}</th>,
+    td: ({ children }: any) => <td className="border border-slate-300 px-3 py-2 text-xs">{children}</td>,
     br: () => <br className="my-1" />,
     text: ({ children }: any) => <span style={{whiteSpace: 'pre-wrap'}}>{children}</span>,
   };
@@ -246,27 +246,27 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
   return (
     <div className="max-w-4xl mx-auto space-y-8">
       {/* 文件上传区域 */}
-      <div className="bg-white rounded-lg shadow p-6">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">📄 文档上传</h2>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <h2 className="text-xl font-semibold text-slate-900 mb-4">📄 文档上传</h2>
         
         <div 
-          className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center hover:border-gray-400 transition-colors cursor-pointer"
+          className="border-2 border-dashed border-slate-300 rounded-xl p-12 text-center hover:border-primary-400 hover:bg-primary-50/40 transition-colors cursor-pointer"
           onClick={() => fileInputRef.current?.click()}
         >
-          <CloudArrowUpIcon className="mx-auto h-12 w-12 text-gray-400" />
+          <CloudArrowUpIcon className="mx-auto h-12 w-12 text-slate-400" />
           <div className="mt-4">
-            <p className="text-lg text-gray-600">
+            <p className="text-lg text-slate-600">
               {uploadedFile ? uploadedFile.name : '点击选择文件或拖拽文件到这里'}
             </p>
-            <p className="text-sm text-gray-500 mt-2">
-              支持 PDF 和 Word 文档，最大 10MB
+            <p className="text-sm text-slate-500 mt-2">
+              支持 PDF 和 Word（.docx）文档，最大 10MB；老式 .doc 请先另存为 .docx
             </p>
           </div>
           
           <input
             ref={fileInputRef}
             type="file"
-            accept=".pdf,.docx,.doc"
+            accept=".pdf,.docx"
             onChange={handleFileSelect}
             className="hidden"
           />
@@ -274,8 +274,8 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
         
         {uploading && (
           <div className="mt-4 text-center">
-            <div className="inline-flex items-center px-4 py-2 text-sm text-blue-600">
-              <div className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600">
+            <div className="inline-flex items-center px-4 py-2 text-sm text-primary-600">
+              <div className="animate-spin -ml-1 mr-3 h-5 w-5 text-primary-600">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
@@ -289,14 +289,14 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
 
       {/* 文档分析区域 */}
       {fileContent && (
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">🔍 文档分析</h2>
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <h2 className="text-xl font-semibold text-slate-900 mb-4">🔍 文档分析</h2>
           
           <div className="flex justify-center mb-6">
             <button
               onClick={handleAnalysis}
               disabled={analyzing}
-              className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center px-6 py-3 border border-transparent text-base font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:bg-slate-400 disabled:cursor-not-allowed"
             >
               {analyzing ? (
                 <>
@@ -321,12 +321,12 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
 
           {/* 流式分析内容显示 */}
           {analyzing && (((currentAnalysisStep === 'overview') && streamingOverview) || ((currentAnalysisStep === 'requirements') && streamingRequirements)) && (
-            <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h4 className="text-sm font-medium text-blue-800 mb-3">
+            <div className="mb-6 p-4 bg-primary-50 border border-primary-200 rounded-lg">
+              <h4 className="text-sm font-medium text-primary-800 mb-3">
                 {currentAnalysisStep === 'overview' ? '正在分析项目概述...' : '正在分析技术评分要求...'}
               </h4>
-              <div className="bg-white p-3 rounded-lg border border-gray-200 max-h-64 overflow-y-auto shadow-sm">
-                <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed text-blue-900 font-sans">
+              <div className="bg-white p-3 rounded-lg border border-slate-200 max-h-64 overflow-y-auto shadow-sm">
+                <pre className="whitespace-pre-wrap break-words text-xs leading-relaxed text-primary-900 font-sans">
                   {currentAnalysisStep === 'overview' ? streamingOverview : streamingRequirements}
                 </pre>
               </div>
@@ -338,7 +338,7 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
             {/* 项目概述 */}
             <div>
               <div className="flex items-center justify-between mb-3 gap-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-slate-700">
                   项目概述
                 </label>
                 {!editingOverview && (
@@ -348,7 +348,7 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
                       setDraftOverview(projectOverview);
                       setEditingOverview(true);
                     }}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                    className="text-sm font-medium text-primary-600 hover:text-primary-700"
                   >
                     编辑
                   </button>
@@ -361,29 +361,29 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
                     value={draftOverview}
                     onChange={(event) => setDraftOverview(event.target.value)}
                     rows={14}
-                    className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-y"
+                    className="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-y"
                     placeholder="项目概述将在这里显示..."
                   />
                   <div className="flex justify-end gap-3">
                     <button
                       type="button"
                       onClick={handleCancelOverview}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                      className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50"
                     >
                       取消
                     </button>
                     <button
                       type="button"
                       onClick={handleSaveOverview}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+                      className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700"
                     >
                       保存
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="w-full p-4 border border-gray-300 rounded-lg max-h-80 overflow-y-auto bg-white shadow-sm">
-                  <div className="prose prose-sm max-w-none text-gray-800">
+                <div className="w-full p-4 border border-slate-300 rounded-lg max-h-80 overflow-y-auto bg-white shadow-sm">
+                  <div className="prose prose-sm max-w-none text-slate-800">
                     <ReactMarkdown components={markdownComponents}>
                       {projectOverview || '项目概述将在这里显示...'}
                     </ReactMarkdown>
@@ -395,7 +395,7 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
             {/* 技术评分要求 */}
             <div>
               <div className="flex items-center justify-between mb-3 gap-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-slate-700">
                   技术评分要求
                 </label>
                 {!editingRequirements && (
@@ -405,7 +405,7 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
                       setDraftRequirements(techRequirements);
                       setEditingRequirements(true);
                     }}
-                    className="text-sm font-medium text-blue-600 hover:text-blue-700"
+                    className="text-sm font-medium text-primary-600 hover:text-primary-700"
                   >
                     编辑
                   </button>
@@ -418,29 +418,29 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
                     value={draftRequirements}
                     onChange={(event) => setDraftRequirements(event.target.value)}
                     rows={14}
-                    className="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 resize-y"
+                    className="w-full p-4 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 resize-y"
                     placeholder="技术评分要求将在这里显示..."
                   />
                   <div className="flex justify-end gap-3">
                     <button
                       type="button"
                       onClick={handleCancelRequirements}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                      className="px-4 py-2 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50"
                     >
                       取消
                     </button>
                     <button
                       type="button"
                       onClick={handleSaveRequirements}
-                      className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md hover:bg-blue-700"
+                      className="px-4 py-2 text-sm font-medium text-white bg-primary-600 border border-transparent rounded-md hover:bg-primary-700"
                     >
                       保存
                     </button>
                   </div>
                 </div>
               ) : (
-                <div className="w-full p-4 border border-gray-300 rounded-lg max-h-80 overflow-y-auto bg-white shadow-sm">
-                  <div className="prose prose-sm max-w-none text-gray-800">
+                <div className="w-full p-4 border border-slate-300 rounded-lg max-h-80 overflow-y-auto bg-white shadow-sm">
+                  <div className="prose prose-sm max-w-none text-slate-800">
                     <ReactMarkdown components={markdownComponents}>
                       {techRequirements || '技术评分要求将在这里显示...'}
                     </ReactMarkdown>

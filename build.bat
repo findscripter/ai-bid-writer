@@ -40,7 +40,7 @@ if errorlevel 1 (
     echo.
     echo ================================================
     echo 构建成功！
-    echo exe文件位于: dist\yibiao-simple.exe
+    echo exe文件位于: dist\ai-bid-writer.exe
     echo ================================================
 )
 echo.

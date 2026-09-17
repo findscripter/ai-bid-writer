@@ -1,4 +1,5 @@
 """目录生成服务。"""
+from __future__ import annotations
 
 import json
 from typing import Any, Dict
@@ -19,6 +20,7 @@ from ..utils.prompts.outline_prompts import (
     generate_children_outline_prompt,
     generate_children_outline_with_old_prompt,
     generate_outline_prompt,
+    generate_outline_variant_prompt,
     generate_outline_with_old_prompt,
     generate_top_level_outline_prompt,
     generate_top_level_outline_with_old_prompt,
@@ -59,6 +61,45 @@ class OutlineService:
             old_outline=old_outline,
             progress_callback=progress_callback,
         )
+
+    async def generate_structure_variant(
+        self,
+        base_outline: Dict[str, Any] | list[dict[str, Any]],
+        overview: str,
+        avoid_top_titles: list[list[str]] | None = None,
+        variant_index: int = 1,
+        persona_desc: str | None = None,
+        progress_callback: ProgressCallback | None = None,
+    ) -> Dict[str, Any]:
+        """基于基准目录生成一份"结构明显不同"的变体目录（用于多份标书）。
+
+        覆盖与基准目录相同的主题范围与技术要点，但更换一级划分维度、标题与归类，
+        并避开 avoid_top_titles 中已用过的结构。返回 {"outline": [...]}（已重排编号）。
+        """
+        if isinstance(base_outline, dict):
+            base_roots = base_outline.get("outline") or base_outline.get("children") or []
+        else:
+            base_roots = list(base_outline or [])
+
+        base_outline_json = json.dumps({"outline": base_roots}, ensure_ascii=False)
+        messages = generate_outline_variant_prompt(
+            base_outline_json=base_outline_json,
+            overview=overview,
+            avoid_top_titles=avoid_top_titles,
+            variant_index=variant_index,
+            persona_desc=persona_desc,
+        )
+
+        result = await self.ai.collect_json_response(
+            messages=messages,
+            temperature=0.85,
+            schema=OutlineResponse,
+            validator=self._validate_complete_outline,
+            progress_callback=progress_callback,
+            progress_label=f"第 {variant_index + 1} 份目录变体",
+            failure_message="模型返回的目录变体格式无效",
+        )
+        return self._renumber_outline(result)
 
     async def _generate_outline_workflow(
         self,

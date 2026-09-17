@@ -144,6 +144,71 @@ class ChapterContentRequest(BaseModel):
         None, description="同级章节列表"
     )
     project_overview: str = Field("", description="项目概述")
+    target_words: Optional[int] = Field(
+        None, description="本章节目标字数（不含标题）", ge=50, le=20000
+    )
+    persona: Optional[str] = Field(
+        None, description="风格 persona 说明（注入 system prompt）"
+    )
+    prior_summaries: Optional[List[Dict[str, str]]] = Field(
+        None,
+        description="之前已生成的本章节其他份次摘要，用于跨份去重；元素形如 {copy_index, summary}",
+    )
+
+
+class Persona(BaseModel):
+    """风格预设。"""
+
+    id: str = Field(..., description="预设 ID")
+    name: str = Field(..., description="显示名称")
+    description: str = Field(..., description="风格说明，会拼接进 system prompt")
+
+
+class PersonaListResponse(BaseModel):
+    """风格预设列表响应。"""
+
+    personas: List[Persona]
+
+
+class MultiCopyContentRequest(BaseModel):
+    """多份正文生成请求。"""
+
+    outline: Dict[str, Any] = Field(..., description="目录结构（含叶子章节）")
+    project_overview: str = Field("", description="项目概述")
+    target_pages: int = Field(
+        50,
+        description="目标总页数（A4/小四/1.5 倍行距经验值约 750 字/页）",
+        ge=1,
+        le=500,
+    )
+    extended_target_pages: Optional[int] = Field(
+        None,
+        description="扩展份目标页数：如果设置，则最后 1 份用此页数（长版/完整版），其余份仍用 target_pages（短版）",
+        ge=1,
+        le=500,
+    )
+    words_per_page: int = Field(
+        750, description="字数每页换算系数", ge=300, le=2000
+    )
+    copies: int = Field(1, description="生成份数", ge=1, le=5)
+    personas: Optional[List[Persona]] = Field(
+        None,
+        description="每份对应的 persona（长度应等于 copies）；为空时使用内置默认轮转",
+    )
+    inject_response_chapters: bool = Field(
+        True,
+        description="是否在目录末尾自动追加'强制响应章节'（采购公告/评审/合同/采购人要求/资格响应）",
+    )
+    parallel_concurrency: int = Field(
+        3,
+        description="同份内普通章节并行生成的最大并发数（响应章节始终串行）。受 LLM 服务并发限制约束，建议 2-3。",
+        ge=1,
+        le=10,
+    )
+    models: Optional[List[str]] = Field(
+        None,
+        description="每份使用的模型ID列表，按份轮转（不足份数时循环）；为空则全部用全局配置的模型",
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -161,6 +226,10 @@ class WordExportOutlineItem(BaseModel):
     description: Optional[str] = None
     children: Optional[List["WordExportOutlineItem"]] = None
     content: Optional[str] = None
+    image_b64: Optional[str] = Field(
+        None, description="该章节配图 PNG 的 base64（导出时解码插入正文后）"
+    )
+    image_title: Optional[str] = Field(None, description="配图标题（图注）")
 
 
 WordExportOutlineItem.model_rebuild()
@@ -172,3 +241,13 @@ class WordExportRequest(BaseModel):
     project_name: Optional[str] = Field(None, description="项目名称")
     project_overview: Optional[str] = Field(None, description="项目概述")
     outline: List[WordExportOutlineItem] = Field(..., description="目录结构，包含内容")
+    copy_index: Optional[int] = Field(None, description="份次索引（用于差异化元数据和排版）")
+    persona_name: Optional[str] = Field(None, description="persona 名称（写入文档属性）")
+    with_diagrams: bool = Field(
+        False,
+        description="为 True 时，导出前由 LLM 为合适的叶子章节自动生成技术插图并嵌入",
+    )
+    diagram_model: Optional[str] = Field(
+        None,
+        description="专门用于生成插图的模型ID（留空则用全局配置模型）；插图对模型能力较敏感，建议用较强模型",
+    )

@@ -5,7 +5,16 @@ import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { OutlineData, OutlineItem } from '../types';
 import { DocumentTextIcon, PlayIcon, DocumentArrowDownIcon, CheckCircleIcon, ExclamationCircleIcon, ArrowUpIcon } from '@heroicons/react/24/outline';
-import { collectSseText, contentApi, ChapterContentRequest, documentApi, getErrorMessage } from '../services/api';
+import {
+  collectSseText,
+  contentApi,
+  ChapterContentRequest,
+  documentApi,
+  getErrorMessage,
+  Persona,
+  MultiCopyEvent,
+  readMultiCopySseStream,
+} from '../services/api';
 import { saveAs } from 'file-saver';
 import { draftStorage } from '../utils/draftStorage';
 
@@ -19,6 +28,41 @@ interface GenerationProgress {
   current: string;
   failed: string[];
   generating: Set<string>; // 正在生成的项目ID集合
+}
+
+interface MultiCopyParams {
+  targetPages: number;
+  extendedTargetPages: number;
+  copies: number;
+  injectResponseChapters: boolean;
+  parallelConcurrency: number;
+  modelsText: string; // 逗号分隔的模型ID，按份轮转；空=全部用默认模型
+}
+
+interface MultiCopyChapterResult {
+  chapterId: string;
+  title: string;
+  targetWords: number | null;
+  charCount: number;
+  content: string;
+}
+
+interface MultiCopyResult {
+  copyIndex: number;
+  persona: Persona | null;
+  chapters: MultiCopyChapterResult[];
+  totalChars: number;
+  outline?: OutlineItem[]; // 该份自己的目录树（每份结构可能不同）
+  leafCount?: number; // 该份的叶子章节数
+  model?: string; // 该份使用的模型
+}
+
+interface MultiCopyProgress {
+  active: boolean;
+  totalChapters: number;
+  completedChapters: number;
+  currentLabel: string;
+  errorMessage: string | null;
 }
 
 
@@ -36,6 +80,29 @@ const ContentEdit: React.FC<ContentEditProps> = ({
   });
   const [leafItems, setLeafItems] = useState<OutlineItem[]>([]);
   const [showScrollToTop, setShowScrollToTop] = useState(false);
+  const [singleTargetPages, setSingleTargetPages] = useState<number>(40);
+  const [exportWithDiagrams, setExportWithDiagrams] = useState<boolean>(false);
+  const [exportDiagramModel, setExportDiagramModel] = useState<string>('');
+
+  // 多份生成相关状态
+  const [showMultiPanel, setShowMultiPanel] = useState(false);
+  const [multiParams, setMultiParams] = useState<MultiCopyParams>({
+    targetPages: 40,
+    extendedTargetPages: 60,
+    copies: 4,
+    injectResponseChapters: true,
+    parallelConcurrency: 3,
+    modelsText: '',
+  });
+  const [multiResults, setMultiResults] = useState<MultiCopyResult[]>([]);
+  const [multiProgress, setMultiProgress] = useState<MultiCopyProgress>({
+    active: false,
+    totalChapters: 0,
+    completedChapters: 0,
+    currentLabel: '',
+    errorMessage: null,
+  });
+  const [exportingCopyIndex, setExportingCopyIndex] = useState<number | null>(null);
 
   // 收集所有叶子节点
   const collectLeafItems = useCallback((items: OutlineItem[]): OutlineItem[] => {
@@ -144,27 +211,27 @@ const ContentEdit: React.FC<ContentEditProps> = ({
       return (
         <div key={item.id} className={`mb-${level === 1 ? '8' : '4'}`}>
           {/* 标题 */}
-          <div className={`text-${level === 1 ? 'xl' : level === 2 ? 'lg' : 'base'} font-${level === 1 ? 'bold' : 'semibold'} text-gray-900 mb-2`}>
+          <div className={`text-${level === 1 ? 'xl' : level === 2 ? 'lg' : 'base'} font-${level === 1 ? 'bold' : 'semibold'} text-slate-900 mb-2`}>
             {item.id} {item.title}
           </div>
           
           {/* 描述 */}
-          <div className="text-sm text-gray-600 mb-4">
+          <div className="text-sm text-slate-600 mb-4">
             {item.description}
           </div>
 
           {/* 内容（仅叶子节点） */}
           {isLeaf && (
-            <div className="border-l-4 border-blue-200 pl-4 mb-6">
+            <div className="border-l-4 border-primary-200 pl-4 mb-6">
               {currentContent ? (
                 <div className="prose max-w-none">
                   <ReactMarkdown>{currentContent}</ReactMarkdown>
                 </div>
               ) : (
-                <div className="text-gray-400 italic py-4">
+                <div className="text-slate-400 italic py-4">
                   <DocumentTextIcon className="inline w-4 h-4 mr-2" />
                   {progress.generating.has(item.id) ? (
-                    <span className="text-blue-600">正在生成内容...</span>
+                    <span className="text-primary-600">正在生成内容...</span>
                   ) : (
                     '内容待生成...'
                   )}
@@ -185,18 +252,20 @@ const ContentEdit: React.FC<ContentEditProps> = ({
   };
 
   // 生成单个章节内容
-  const generateItemContent = async (item: OutlineItem, projectOverview: string): Promise<OutlineItem> => {
+  const generateItemContent = async (
+    item: OutlineItem,
+    projectOverview: string,
+    targetWords?: number,
+  ): Promise<OutlineItem> => {
     if (!outlineData) throw new Error('缺少目录数据');
-    
-    // 将当前项目添加到正在生成的集合中
-    setProgress(prev => ({ 
-      ...prev, 
+
+    setProgress(prev => ({
+      ...prev,
       current: item.title,
       generating: new Set([...Array.from(prev.generating), item.id])
     }));
-    
+
     try {
-      // 获取上级章节和同级章节信息
       const parentChapters = getParentChapters(item.id, outlineData.outline);
       const siblingChapters = getSiblingChapters(item.id, outlineData.outline);
 
@@ -204,7 +273,8 @@ const ContentEdit: React.FC<ContentEditProps> = ({
         chapter: item,
         parent_chapters: parentChapters,
         sibling_chapters: siblingChapters,
-        project_overview: projectOverview
+        project_overview: projectOverview,
+        target_words: targetWords,
       };
 
       const response = await contentApi.generateChapterContentStream(request);
@@ -264,43 +334,205 @@ const ContentEdit: React.FC<ContentEditProps> = ({
       generating: new Set<string>()
     });
 
+    // 按目标页数均摊每章字数（750字/页，200字下限，8000字上限）
+    const WORDS_PER_PAGE = 750;
+    const totalWords = singleTargetPages * WORDS_PER_PAGE;
+    const rawPerChapter = leafItems.length > 0 ? Math.floor(totalWords / leafItems.length) : 750;
+    const perChapterWords = Math.max(200, Math.min(8000, rawPerChapter));
+
     try {
-      // 使用5个并发线程生成内容
-      const concurrency = 5;
+      const concurrency = 3;
       const updatedItems = [...leafItems];
-      
+
       for (let i = 0; i < leafItems.length; i += concurrency) {
         const batch = leafItems.slice(i, i + concurrency);
-        const promises = batch.map(item => 
-          generateItemContent(item, outlineData.project_overview || '')
+        const promises = batch.map(item =>
+          generateItemContent(item, outlineData.project_overview || '', perChapterWords)
             .then(updatedItem => {
               const index = updatedItems.findIndex(ui => ui.id === updatedItem.id);
-              if (index !== -1) {
-                updatedItems[index] = updatedItem;
-              }
+              if (index !== -1) updatedItems[index] = updatedItem;
               setProgress(prev => ({ ...prev, completed: prev.completed + 1 }));
               return updatedItem;
             })
             .catch(() => {
               setProgress(prev => ({ ...prev, completed: prev.completed + 1 }));
-              return item; // 返回原始项目
+              return item;
             })
         );
-
         await Promise.all(promises);
       }
 
-      // 更新状态
       setLeafItems(updatedItems);
-      
-      // 这里需要更新整个outlineData，但由于我们只有props，需要通过回调通知父组件
-      // 暂时只更新本地状态
-      
     } catch (error) {
       setMessage({ type: 'error', text: getErrorMessage(error, '生成内容失败') });
     } finally {
       setIsGenerating(false);
       setProgress(prev => ({ ...prev, current: '', generating: new Set<string>() }));
+    }
+  };
+
+  // 多份生成主流程：调用 SSE 接口，按事件累积每份每章内容
+  const handleGenerateMultiCopies = async () => {
+    if (!outlineData || leafItems.length === 0) {
+      setMessage({ type: 'error', text: '请先生成目录' });
+      return;
+    }
+    if (multiParams.copies < 2) {
+      setMessage({ type: 'error', text: '多份生成至少需要 2 份' });
+      return;
+    }
+
+    setMessage(null);
+    setMultiResults([]);
+    setMultiProgress({
+      active: true,
+      totalChapters: leafItems.length * multiParams.copies,
+      completedChapters: 0,
+      currentLabel: '准备中...',
+      errorMessage: null,
+    });
+
+    // 用本地变量累积，避免 React 异步 setState 导致丢事件
+    const acc = new Map<number, MultiCopyResult>();
+    // 章节 id → 标题（包括后端注入的响应章节）
+    const chapterTitleMap = new Map<string, string>();
+    leafItems.forEach((l) => chapterTitleMap.set(l.id, l.title));
+
+    try {
+      const modelList = multiParams.modelsText
+        .split(/[,，;；\n]/)
+        .map((m) => m.trim())
+        .filter(Boolean);
+
+      const response = await contentApi.generateMultiCopiesStream({
+        outline: { outline: outlineData.outline },
+        project_overview: outlineData.project_overview || '',
+        target_pages: multiParams.targetPages,
+        extended_target_pages: multiParams.extendedTargetPages,
+        copies: multiParams.copies,
+        inject_response_chapters: multiParams.injectResponseChapters,
+        parallel_concurrency: multiParams.parallelConcurrency,
+        models: modelList.length > 0 ? modelList : undefined,
+      });
+
+      await readMultiCopySseStream(response, (event: MultiCopyEvent) => {
+        if ('error' in event && event.error === true && !('type' in event)) {
+          const errorEvent = event as { error: true; message?: string };
+          throw new Error(errorEvent.message || '多份生成失败');
+        }
+        const ev = event as Exclude<MultiCopyEvent, { error: true; message?: string }>;
+
+        if (ev.type === 'meta') {
+          // 每份目录结构不同，总章节数 = 各份叶子数之和（后端已求和）
+          const realTotal = ev.total_leaf_count ?? ev.leaf_count;
+          setMultiProgress((p) => ({ ...p, totalChapters: realTotal }));
+          const failedCount = (ev.copies_plan || []).filter((c) => c.variant_failed).length;
+          if (failedCount > 0) {
+            setMessage({
+              type: 'error',
+              text: `有 ${failedCount} 份目录变体生成失败，已回退为原目录结构（这些份的目录可能与第 1 份相同）。`,
+            });
+          }
+        } else if (ev.type === 'copy_start') {
+          acc.set(ev.copy_index, {
+            copyIndex: ev.copy_index,
+            persona: ev.persona,
+            chapters: [],
+            totalChars: 0,
+            outline: ev.outline,
+            leafCount: ev.leaf_count,
+            model: ev.model,
+          });
+          const tag = (ev as { is_extended?: boolean }).is_extended ? '【长版】' : '';
+          const modelTag = ev.model ? ` · ${ev.model}` : '';
+          setMultiProgress((p) => ({ ...p, currentLabel: `${tag}第 ${ev.copy_index + 1} 份开始（${ev.persona?.name ?? '默认风格'}${modelTag}）` }));
+        } else if (ev.type === 'chapter_start') {
+          if (ev.title) {
+            chapterTitleMap.set(ev.chapter_id, ev.title);
+          }
+          setMultiProgress((p) => ({ ...p, currentLabel: `第 ${ev.copy_index + 1} 份 - ${ev.title}（目标 ${ev.target_words ?? '?'} 字）` }));
+        } else if (ev.type === 'chapter_end') {
+          const copy = acc.get(ev.copy_index);
+          if (copy) {
+            copy.chapters.push({
+              chapterId: ev.chapter_id,
+              title: chapterTitleMap.get(ev.chapter_id) || ev.chapter_id,
+              targetWords: null,
+              charCount: ev.char_count,
+              content: ev.content,
+            });
+            copy.totalChars += ev.char_count;
+          }
+          setMultiResults(Array.from(acc.values()).sort((a, b) => a.copyIndex - b.copyIndex));
+          setMultiProgress((p) => ({ ...p, completedChapters: p.completedChapters + 1 }));
+        }
+      });
+
+      setMessage({ type: 'success', text: `已生成 ${multiParams.copies} 份不雷同正文` });
+    } catch (err) {
+      const errMsg = getErrorMessage(err, '多份生成失败');
+      setMultiProgress((p) => ({ ...p, errorMessage: errMsg }));
+      setMessage({ type: 'error', text: errMsg });
+    } finally {
+      setMultiProgress((p) => ({ ...p, active: false, currentLabel: '' }));
+    }
+  };
+
+  // 把多份生成结果中的某一份导出为 Word（用对应份内容覆盖原 outline 的叶子，
+  // 并将后端注入的"响应章节"作为顶级章节追加到导出 outline）
+  const handleExportMultiCopy = async (copy: MultiCopyResult) => {
+    if (!outlineData) return;
+    setExportingCopyIndex(copy.copyIndex);
+    try {
+      const contentMap = new Map(copy.chapters.map((c) => [c.chapterId, c.content]));
+      const usedIds = new Set<string>();
+
+      const buildExportOutline = (items: OutlineItem[]): OutlineItem[] =>
+        items.map((item) => {
+          usedIds.add(item.id);
+          const isLeaf = !item.children || item.children.length === 0;
+          const next: OutlineItem = { ...item };
+          if (isLeaf) {
+            next.content = contentMap.get(item.id) || item.content || '';
+          } else {
+            next.children = buildExportOutline(item.children!);
+          }
+          return next;
+        });
+
+      // 每份目录结构不同：按"该份自己的目录树"套正文导出；缺失时回退到原目录
+      const baseTree = copy.outline && copy.outline.length > 0 ? copy.outline : outlineData.outline;
+      const baseOutline = buildExportOutline(baseTree);
+
+      // 后端注入的响应章节在 baseOutline 里不存在，需要补到顶级
+      const extraChapters: OutlineItem[] = copy.chapters
+        .filter((c) => !usedIds.has(c.chapterId))
+        .map((c) => ({
+          id: c.chapterId,
+          title: c.title,
+          description: '',
+          content: c.content,
+        }));
+
+      const finalOutline = [...baseOutline, ...extraChapters];
+
+      const response = await documentApi.exportWord({
+        project_name: outlineData.project_name,
+        project_overview: outlineData.project_overview,
+        outline: finalOutline,
+        copy_index: copy.copyIndex,
+        persona_name: copy.persona?.name,
+        with_diagrams: exportWithDiagrams,
+        diagram_model: exportWithDiagrams ? (exportDiagramModel.trim() || undefined) : undefined,
+      });
+      const blob = await response.blob();
+      const personaSuffix = copy.persona ? `-${copy.persona.name}` : '';
+      saveAs(blob, `${outlineData.project_name || '标书文档'}-第${copy.copyIndex + 1}份${personaSuffix}.docx`);
+      setMessage({ type: 'success', text: `第 ${copy.copyIndex + 1} 份导出成功（共 ${finalOutline.length} 个一级章节）` });
+    } catch (err) {
+      setMessage({ type: 'error', text: getErrorMessage(err, '导出失败') });
+    } finally {
+      setExportingCopyIndex(null);
     }
   };
 
@@ -352,6 +584,8 @@ const ContentEdit: React.FC<ContentEditProps> = ({
         project_name: outlineData.project_name,
         project_overview: outlineData.project_overview,
         outline: buildExportOutline(outlineData.outline),
+        with_diagrams: exportWithDiagrams,
+        diagram_model: exportWithDiagrams ? (exportDiagramModel.trim() || undefined) : undefined,
       };
 
       const response = await documentApi.exportWord(exportPayload);
@@ -366,11 +600,11 @@ const ContentEdit: React.FC<ContentEditProps> = ({
   if (!outlineData) {
     return (
       <div className="max-w-6xl mx-auto">
-        <div className="bg-white rounded-lg shadow p-6">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="text-center py-12">
-            <DocumentTextIcon className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">暂无内容</h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <DocumentTextIcon className="mx-auto h-12 w-12 text-slate-400" />
+            <h3 className="mt-2 text-sm font-medium text-slate-900">暂无内容</h3>
+            <p className="mt-1 text-sm text-slate-500">
               请先在"目录编辑"步骤中生成目录结构
             </p>
           </div>
@@ -384,12 +618,12 @@ const ContentEdit: React.FC<ContentEditProps> = ({
   return (
     <div className="max-w-6xl mx-auto">
       {/* 顶部工具栏 */}
-      <div className="bg-white rounded-lg shadow mb-6">
-        <div className="px-6 py-4 border-b border-gray-200">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm mb-6">
+        <div className="px-6 py-4 border-b border-slate-200">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold text-gray-900">标书内容</h2>
-              <p className="text-sm text-gray-500 mt-1">
+              <h2 className="text-lg font-semibold text-slate-900">标书内容</h2>
+              <p className="text-sm text-slate-500 mt-1">
                 共 {leafItems.length} 个章节，已生成 {completedItems} 个
                 {progress.failed.length > 0 && (
                   <span className="text-red-500 ml-2">失败 {progress.failed.length} 个</span>
@@ -398,22 +632,74 @@ const ContentEdit: React.FC<ContentEditProps> = ({
             </div>
             
             <div className="flex items-center space-x-3">
+              {/* 目标页数控制 */}
+              <div className="flex items-center space-x-1.5">
+                <label className="text-xs text-slate-500 whitespace-nowrap">目标页数</label>
+                <input
+                  type="number"
+                  min={5}
+                  max={300}
+                  value={singleTargetPages}
+                  onChange={(e) => setSingleTargetPages(Math.max(5, Math.min(300, Number(e.target.value) || 40)))}
+                  disabled={isGenerating}
+                  className="w-16 rounded border-slate-300 shadow-sm text-sm focus:border-primary-500 focus:ring-primary-500 disabled:opacity-50"
+                  title={`每章约 ${leafItems.length > 0 ? Math.max(200, Math.min(8000, Math.floor(singleTargetPages * 750 / leafItems.length))) : 750} 字（A4/小四/1.5倍行距≈750字/页）`}
+                />
+                <span className="text-xs text-slate-400">
+                  ≈{leafItems.length > 0 ? Math.max(200, Math.min(8000, Math.floor(singleTargetPages * 750 / leafItems.length))) : 750}字/章
+                </span>
+              </div>
+
               <button
                 onClick={handleGenerateContent}
                 disabled={isGenerating}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <PlayIcon className="w-4 h-4 mr-2" />
                 {isGenerating ? '生成中...' : '生成标书'}
               </button>
               
+              <label
+                className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none"
+                title="导出前由 AI 为架构/流程/进度/组织等章节自动生成技术插图并嵌入（会增加导出耗时与 LLM 调用）"
+              >
+                <input
+                  type="checkbox"
+                  checked={exportWithDiagrams}
+                  onChange={(e) => setExportWithDiagrams(e.target.checked)}
+                  disabled={isGenerating}
+                  className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                />
+                插入技术插图
+              </label>
+              {exportWithDiagrams && (
+                <input
+                  type="text"
+                  value={exportDiagramModel}
+                  onChange={(e) => setExportDiagramModel(e.target.value)}
+                  disabled={isGenerating}
+                  placeholder="插图模型(留空用默认)"
+                  title="专门用于画图的模型，建议用较强模型。留空则用左侧配置的模型"
+                  className="w-44 rounded-md border-slate-300 shadow-sm text-xs font-mono focus:border-primary-500 focus:ring-primary-500"
+                />
+              )}
+
               <button
                 onClick={handleExportWord}
                 disabled={isGenerating}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <DocumentArrowDownIcon className="w-4 h-4 mr-2" />
                 导出Word
+              </button>
+
+              <button
+                onClick={() => setShowMultiPanel((v) => !v)}
+                disabled={isGenerating || multiProgress.active}
+                className="inline-flex items-center px-4 py-2 border border-slate-300 text-sm font-medium rounded-md text-slate-700 bg-slate-50 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="一次生成多份不雷同的标书，每份风格不同"
+              >
+                📑 {showMultiPanel ? '收起' : '多份生成'}
               </button>
             </div>
           </div>
@@ -421,13 +707,13 @@ const ContentEdit: React.FC<ContentEditProps> = ({
           {/* 进度条 */}
           {isGenerating && (
             <div className="mt-4">
-              <div className="flex items-center justify-between text-sm text-gray-600 mb-2">
+              <div className="flex items-center justify-between text-sm text-slate-600 mb-2">
                 <span>正在生成: {progress.current}</span>
                 <span>{progress.completed} / {progress.total}</span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full bg-slate-200 rounded-full h-2">
                 <div
-                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  className="bg-primary-600 h-2 rounded-full transition-all duration-300"
                   style={{ width: `${(progress.completed / progress.total) * 100}%` }}
                 />
               </div>
@@ -443,23 +729,209 @@ const ContentEdit: React.FC<ContentEditProps> = ({
               {message.text}
             </div>
           )}
+
+          {/* 多份生成参数面板 */}
+          {showMultiPanel && (
+            <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">多份不雷同标书生成</h3>
+                  <p className="text-xs text-slate-700 mt-1">
+                    每份采用不同 persona、字体、字号、行距、页边距，并跨份做内容去重。
+                    自动追加"响应表型章节"覆盖招标文件第一/三/四/五章硬性要求。
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">短版页数</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={multiParams.targetPages}
+                    onChange={(e) => setMultiParams({ ...multiParams, targetPages: Math.max(1, Number(e.target.value) || 1) })}
+                    disabled={multiProgress.active}
+                    className="w-full rounded-md border-slate-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">前 N-1 份的目标页数（建议 30-50）</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">长版页数</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={multiParams.extendedTargetPages}
+                    onChange={(e) => setMultiParams({ ...multiParams, extendedTargetPages: Math.max(1, Number(e.target.value) || 1) })}
+                    disabled={multiProgress.active}
+                    className="w-full rounded-md border-slate-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">最后 1 份的目标页数（建议 50+）</p>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 mb-1">份数</label>
+                  <input
+                    type="number"
+                    min={2}
+                    max={5}
+                    value={multiParams.copies}
+                    onChange={(e) => setMultiParams({ ...multiParams, copies: Math.max(2, Math.min(5, Number(e.target.value) || 2)) })}
+                    disabled={multiProgress.active}
+                    className="w-full rounded-md border-slate-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 sm:text-sm"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">2-5 份，自动轮转 persona</p>
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={handleGenerateMultiCopies}
+                    disabled={multiProgress.active || isGenerating || leafItems.length === 0}
+                    className="w-full inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {multiProgress.active ? '生成中...' : '🚀 开始生成'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-3">
+                <label className="block text-xs font-medium text-slate-700 mb-1">
+                  每份使用的模型（逗号分隔，按份轮转；留空则全部用默认模型）
+                </label>
+                <input
+                  type="text"
+                  value={multiParams.modelsText}
+                  onChange={(e) => setMultiParams({ ...multiParams, modelsText: e.target.value })}
+                  disabled={multiProgress.active}
+                  placeholder="deepseek-chat, gpt-4o（留空则全部用左侧配置的模型）"
+                  className="w-full rounded-md border-slate-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-xs font-mono"
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  不同模型写出的结构和文风天然不同，进一步降低雷同度；模型ID需在当前 API 服务商可用
+                </p>
+              </div>
+
+              <div className="mt-3 flex items-center justify-between gap-4 flex-wrap">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="inject-response-chapters"
+                    checked={multiParams.injectResponseChapters}
+                    onChange={(e) => setMultiParams({ ...multiParams, injectResponseChapters: e.target.checked })}
+                    disabled={multiProgress.active}
+                    className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                  />
+                  <label htmlFor="inject-response-chapters" className="ml-2 text-xs text-slate-700">
+                    自动追加响应表型章节 — <strong>建议保持开启</strong>
+                  </label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-slate-700">同份并发数</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={multiParams.parallelConcurrency}
+                    onChange={(e) => setMultiParams({ ...multiParams, parallelConcurrency: Math.max(1, Math.min(10, Number(e.target.value) || 1)) })}
+                    disabled={multiProgress.active}
+                    className="w-16 rounded-md border-slate-300 shadow-sm focus:border-primary-500 focus:ring-primary-500 text-xs"
+                  />
+                  <span className="text-xs text-slate-500">受 LLM 限流约束，建议 2-3</span>
+                </div>
+              </div>
+
+              {/* 多份进度 */}
+              {(multiProgress.active || multiProgress.completedChapters > 0) && (
+                <div className="mt-4">
+                  <div className="flex items-center justify-between text-xs text-slate-700 mb-1">
+                    <span>{multiProgress.currentLabel || '完成'}</span>
+                    <span>{multiProgress.completedChapters} / {multiProgress.totalChapters}</span>
+                  </div>
+                  <div className="w-full bg-slate-200 rounded-full h-1.5">
+                    <div
+                      className="bg-primary-600 h-1.5 rounded-full transition-all duration-300"
+                      style={{
+                        width: multiProgress.totalChapters > 0
+                          ? `${(multiProgress.completedChapters / multiProgress.totalChapters) * 100}%`
+                          : '0%',
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* 多份结果列表 */}
+              {multiResults.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {multiResults.map((copy) => {
+                    const isLastCopy = copy.copyIndex === multiParams.copies - 1;
+                    // 每份目录结构不同，用该份自己的叶子数判断是否生成完成
+                    const realLeafCount = copy.leafCount ?? leafItems.length;
+                    const isComplete = copy.chapters.length >= realLeafCount;
+                    return (
+                      <div
+                        key={copy.copyIndex}
+                        className="flex items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium text-slate-900">
+                            第 {copy.copyIndex + 1} 份
+                            {isLastCopy && (
+                              <span className="ml-2 inline-block px-2 py-0.5 text-xs bg-amber-100 text-amber-700 rounded">
+                                长版（≈{multiParams.extendedTargetPages}页）
+                              </span>
+                            )}
+                            {copy.persona && (
+                              <span className="ml-2 inline-block px-2 py-0.5 text-xs bg-slate-100 text-slate-700 rounded">
+                                {copy.persona.name}
+                              </span>
+                            )}
+                            {copy.model && (
+                              <span className="ml-2 inline-block px-2 py-0.5 text-xs bg-primary-50 text-primary-700 rounded font-mono">
+                                {copy.model}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-slate-500 mt-0.5">
+                            {copy.chapters.length} 章 · 共 {copy.totalChars.toLocaleString()} 字 · 约 {Math.round(copy.totalChars / 750)} 页
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleExportMultiCopy(copy)}
+                          disabled={multiProgress.active || exportingCopyIndex !== null || !isComplete}
+                          className="ml-3 inline-flex items-center px-3 py-1.5 border border-slate-300 text-xs font-medium rounded-md text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <DocumentArrowDownIcon className="w-3.5 h-3.5 mr-1.5" />
+                          {exportingCopyIndex === copy.copyIndex
+                            ? '导出中...'
+                            : isComplete
+                              ? '导出 Word'
+                              : `${copy.chapters.length}/${realLeafCount}`}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* 文档内容 */}
-      <div className="bg-white rounded-lg shadow">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
         <div className="p-8">
           <div className="prose max-w-none">
             {/* 文档标题 */}
-            <h1 className="text-3xl font-bold text-gray-900 mb-8">
+            <h1 className="text-3xl font-bold text-slate-900 mb-8">
               {outlineData.project_name || '投标技术文件'}
             </h1>
             
             {/* 项目概述 */}
             {outlineData.project_overview && (
-              <div className="bg-blue-50 border-l-4 border-blue-400 p-6 mb-8">
-                <h2 className="text-lg font-semibold text-blue-900 mb-2">项目概述</h2>
-                <p className="text-blue-800">{outlineData.project_overview}</p>
+              <div className="bg-primary-50 border-l-4 border-primary-400 p-6 mb-8">
+                <h2 className="text-lg font-semibold text-primary-900 mb-2">项目概述</h2>
+                <p className="text-primary-800">{outlineData.project_overview}</p>
               </div>
             )}
 
@@ -472,15 +944,15 @@ const ContentEdit: React.FC<ContentEditProps> = ({
       </div>
 
       {/* 底部统计 */}
-      <div className="mt-6 bg-white rounded-lg shadow p-4">
-        <div className="flex items-center justify-between text-sm text-gray-600">
+      <div className="mt-6 bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+        <div className="flex items-center justify-between text-sm text-slate-600">
           <div className="flex items-center space-x-6">
             <div className="flex items-center">
               <CheckCircleIcon className="w-4 h-4 text-green-500 mr-1" />
               <span>已完成: {completedItems}</span>
             </div>
             <div className="flex items-center">
-              <DocumentTextIcon className="w-4 h-4 text-gray-400 mr-1" />
+              <DocumentTextIcon className="w-4 h-4 text-slate-400 mr-1" />
               <span>待生成: {leafItems.length - completedItems}</span>
             </div>
             {progress.failed.length > 0 && (
@@ -500,7 +972,7 @@ const ContentEdit: React.FC<ContentEditProps> = ({
       {showScrollToTop && (
         <button
           onClick={scrollToTop}
-          className="fixed bottom-24 right-6 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-3 shadow-lg transition-all duration-300 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 z-[60]"
+          className="fixed bottom-24 right-6 bg-primary-600 hover:bg-primary-700 text-white rounded-full p-3 shadow-lg transition-all duration-300 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 z-[60]"
           aria-label="回到顶部"
         >
           <ArrowUpIcon className="w-5 h-5" />

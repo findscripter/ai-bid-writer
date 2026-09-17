@@ -1,4 +1,5 @@
 """文件处理服务"""
+from __future__ import annotations
 
 import aiofiles
 import os
@@ -38,8 +39,8 @@ class FileService:
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     }
 
-    # 图片上传配置
-    IMAGE_UPLOAD_URL = "https://mt.agnet.top/image/upload"
+    # 可选：把招标文件里的插图传到外部图床。默认关闭，避免把标书图片发到第三方。
+    IMAGE_UPLOAD_URL = os.environ.get("IMAGE_UPLOAD_URL", "").strip()
     IMAGE_UPLOAD_TIMEOUT = 30  # 超时时间（秒）
 
     @staticmethod
@@ -49,7 +50,9 @@ class FileService:
 
     @staticmethod
     async def upload_image_to_server(image_data: bytes, filename: str) -> Optional[str]:
-        """上传图片到外部服务器"""
+        """上传图片到外部服务器。未配置 IMAGE_UPLOAD_URL 时直接跳过。"""
+        if not FileService.IMAGE_UPLOAD_URL:
+            return None
         try:
             # 准备multipart/form-data格式的数据
             form_data = aiohttp.FormData()

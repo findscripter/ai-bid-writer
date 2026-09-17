@@ -1,7 +1,12 @@
 {
-  "short_name": "易标AI",
-  "name": "易标AI-标书智写",
+  "short_name": "AI写标书助手",
+  "name": "AI写标书助手 - 智能投标文件生成",
   "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
     {
       "src": "favicon.ico",
       "sizes": "64x64 32x32 24x24 16x16",
@@ -20,6 +25,6 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
-  "background_color": "#ffffff"
+  "theme_color": "#0f172a",
+  "background_color": "#f1f5f9"
 }

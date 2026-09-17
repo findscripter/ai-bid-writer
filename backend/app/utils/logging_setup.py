@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 
-_FILE_HANDLER_FLAG = "_yibiao_file_logging_enabled"
+_FILE_HANDLER_FLAG = "_ai_bid_file_logging_enabled"
 
 
 def _backend_dir() -> Path:
