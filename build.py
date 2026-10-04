@@ -168,7 +168,7 @@ def build_exe():
         "--hidden-import=pdfplumber.utils --hidden-import=fitz --hidden-import=pymupdf "
         "--hidden-import=docx2python --hidden-import=docx2python.iterators --hidden-import=paragraphs "
         "--hidden-import=pydantic --hidden-import=pydantic_settings --hidden-import=multipart "
-        "--hidden-import=aiofiles --hidden-import=dotenv --hidden-import=json --hidden-import=pathlib "
+        "--hidden-import=dotenv --hidden-import=json --hidden-import=pathlib "
         "--hidden-import=asyncio --hidden-import=signal --hidden-import=atexit "
         "--console app_launcher.py"
     )

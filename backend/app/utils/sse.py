@@ -57,9 +57,12 @@ def sse_result(payload: Dict[str, Any]) -> str:
     return sse_data({"type": "result", **payload})
 
 
-def sse_error(message: str) -> str:
-    """输出统一错误事件。"""
-    return sse_data({"error": True, "message": message})
+def sse_error(message: str, code: Optional[str] = None) -> str:
+    """输出统一错误事件；code 是固定的错误码（例如项目被占用 project_busy），前端据此区分原因。"""
+    payload: Dict[str, Any] = {"error": True, "message": message}
+    if code:
+        payload["code"] = code
+    return sse_data(payload)
 
 
 def sse_done() -> str:

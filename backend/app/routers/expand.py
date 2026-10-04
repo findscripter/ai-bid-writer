@@ -19,11 +19,6 @@ router = APIRouter(prefix="/api/expand", tags=["标书扩写"])
 async def upload_file(file: UploadFile = File(...)):
     """上传扩写参考文档并提取旧目录。"""
     try:
-        if not FileService.is_supported_document(file.content_type):
-            return FileUploadResponse(
-                success=False, message="不支持的文件类型，请上传PDF或Word文档"
-            )
-
         file_content = await FileService.process_uploaded_file(file)
         expand_service = ExpandService()
         outline = await expand_service.generate_expand_outline(file_content)

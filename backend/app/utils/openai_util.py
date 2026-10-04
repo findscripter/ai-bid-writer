@@ -1,23 +1,79 @@
 """OpenAI 调用公共工具。"""
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import re
 import uuid
-from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List
+from dataclasses import dataclass
+from typing import Any, AsyncGenerator, Awaitable, Callable, Dict, List, Optional, Tuple
 
+import httpx
 import openai
 from pydantic import BaseModel, ValidationError
 
 from ..config import settings
 from ..utils.config_manager import config_manager
-from ..utils.errors import AppError
+from ..utils.errors import AppError, classify_llm_error
 from .prompts.json_repair_prompts import build_json_repair_messages
 
 logger = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[str], Awaitable[None]]
 JsonValidator = Callable[[Dict[str, Any]], None]
+
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL)
+_JSON_FENCE_RE = re.compile(r"```(?:json|JSON)?\s*\n(.*?)\n```", re.DOTALL)
+
+
+@dataclass
+class StreamInfo:
+    """一次流式调用结束后的信息，由 stream_chat_completion 填写。
+
+    finish_reason 为 "length" 表示输出因长度上限被截断，调用方需要接着续写。
+    token 用量只有服务商在流里返回时才有值。
+    """
+
+    finish_reason: Optional[str] = None
+    chars: int = 0
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    cached_tokens: int = 0
+
+
+# 同一组 (api_key, base_url) 复用一个客户端，避免每次调用都新建连接池。
+# 客户端内部的连接绑定事件循环，所以循环变了（测试里常见）就重建。
+_CLIENT_CACHE: Dict[Tuple[str, str], Tuple[Any, openai.AsyncOpenAI]] = {}
+_CLIENT_CACHE_LIMIT = 8
+
+
+def _get_client(api_key: str, base_url: str) -> openai.AsyncOpenAI:
+    try:
+        loop: Any = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    key = (api_key, base_url or "")
+    cached = _CLIENT_CACHE.get(key)
+    if cached is not None and loop is not None and cached[0] is loop:
+        return cached[1]
+
+    client = openai.AsyncOpenAI(
+        api_key=api_key,
+        base_url=base_url or None,
+        # read 是流里两次数据之间的最长等待；SDK 默认 600 秒，卡死的连接要等十分钟才报错
+        timeout=httpx.Timeout(
+            settings.llm_timeout_seconds,
+            connect=settings.llm_connect_timeout_seconds,
+        ),
+        max_retries=settings.llm_max_retries,
+    )
+    if loop is not None:
+        if len(_CLIENT_CACHE) >= _CLIENT_CACHE_LIMIT:
+            _CLIENT_CACHE.clear()
+        _CLIENT_CACHE[key] = (loop, client)
+    return client
 
 
 class OpenAIUtil:
@@ -33,10 +89,27 @@ class OpenAIUtil:
         )
         if not self.api_key:
             raise AppError("请先配置OpenAI API密钥", status_code=400)
-        self.client = openai.AsyncOpenAI(
-            api_key=self.api_key,
-            base_url=self.base_url or None,
-        )
+        self.client = _get_client(self.api_key, self.base_url)
+
+    @classmethod
+    def from_values(cls, api_key: str, base_url: str = "", model_name: str = "") -> "OpenAIUtil":
+        """用给定的参数创建客户端，不读也不写配置文件（设置页“测试连接”时用）。"""
+        if not (api_key or "").strip():
+            raise AppError("请先配置OpenAI API密钥", status_code=400)
+        instance = cls.__new__(cls)
+        instance.api_key = api_key.strip()
+        instance.base_url = (base_url or "").strip()
+        instance.model_name = (model_name or "").strip() or "gpt-3.5-turbo"
+        instance.client = _get_client(instance.api_key, instance.base_url)
+        return instance
+
+    async def list_all_models(self) -> List[str]:
+        """返回服务商提供的全部模型 ID（不做关键字过滤）。"""
+        try:
+            models = await self.client.models.list()
+        except Exception as exc:
+            raise classify_llm_error(exc) from exc
+        return sorted({model.id for model in models.data if getattr(model, "id", None)})
 
     def _chat_endpoint_url(self) -> str:
         """获取聊天完成接口地址。"""
@@ -154,8 +227,13 @@ class OpenAIUtil:
 
     @staticmethod
     def _extract_json_content(content: str) -> str:
-        """提取模型响应中的 JSON 内容，兼容 Markdown 代码块包裹。"""
-        normalized = content.strip()
+        """提取模型响应中的 JSON 内容，兼容 Markdown 代码块包裹与推理模型的 <think> 思考过程。"""
+        normalized = _THINK_BLOCK_RE.sub("", content or "").strip()
+        if not normalized.startswith("```") and not normalized.startswith(("{", "[")):
+            # 前后带了说明文字：取其中的 ```json 代码块
+            fenced = _JSON_FENCE_RE.search(normalized)
+            if fenced:
+                return fenced.group(1).strip()
         if not normalized.startswith("```"):
             return normalized
 
@@ -220,53 +298,64 @@ class OpenAIUtil:
                 chat_models.append(model.id)
         return sorted(set(chat_models))
 
+    @staticmethod
+    def _drop_unsupported_param(params: dict[str, Any], error_text: str) -> bool:
+        """服务商报某个可选参数不被支持时，去掉它以便重试；没有可去掉的返回 False。
+
+        response_format 不在这里处理：它由上层的 JSON 模式降级逻辑负责。
+        """
+        lowered = error_text.lower()
+        if "temperature" in params and "temperature" in lowered:
+            # 部分模型（如 GPT-5 系）不接受自定义 temperature
+            del params["temperature"]
+            return True
+        if "max_tokens" in params and "max_tokens" in lowered:
+            value = params.pop("max_tokens")
+            if "max_completion_tokens" in lowered:
+                params["max_completion_tokens"] = value
+            return True
+        if "max_completion_tokens" in params and "max_completion_tokens" in lowered:
+            del params["max_completion_tokens"]
+            return True
+        return False
+
     async def stream_chat_completion(
         self,
         messages: list[dict[str, str]],
         temperature: float = 0.7,
         response_format: dict | None = None,
+        max_tokens: int | None = None,
+        info: StreamInfo | None = None,
     ) -> AsyncGenerator[str, None]:
-        """流式调用聊天完成接口。"""
+        """流式调用聊天完成接口。
+
+        info 不为空时，结束后把 finish_reason 等信息写进去（调用方据此判断是否被截断）。
+        失败时抛 LLMError（AppError 的子类），带有错误类别与是否值得重试。
+        """
         request_id = uuid.uuid4().hex
         parts: list[str] = []
         raw_chunks: list[dict[str, Any]] = []
+        keep_raw = settings.enable_file_logging
         self._log_ai_request(request_id, messages, temperature, response_format)
 
-        extra: dict[str, Any] = (
-            {"response_format": response_format} if response_format is not None else {}
-        )
-        try:
-            stream = await self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=temperature,
-                stream=True,
-                **extra,
-            )
-        except Exception as exc:
-            # 部分模型（如 GPT-5 系）不接受自定义 temperature，去掉后重试一次
-            if "temperature" in str(exc).lower():
-                try:
-                    stream = await self.client.chat.completions.create(
-                        model=self.model_name,
-                        messages=messages,
-                        stream=True,
-                        **extra,
-                    )
-                except Exception as retry_exc:
-                    self._log_ai_error(
-                        request_id,
-                        messages,
-                        temperature,
-                        response_format,
-                        "",
-                        raw_chunks,
-                        retry_exc,
-                    )
-                    raise AppError(
-                        f"模型调用失败: {retry_exc}", status_code=502
-                    ) from retry_exc
-            else:
+        params: dict[str, Any] = {"temperature": temperature}
+        if response_format is not None:
+            params["response_format"] = response_format
+        if max_tokens:
+            params["max_tokens"] = int(max_tokens)
+
+        stream = None
+        while stream is None:
+            try:
+                stream = await self.client.chat.completions.create(
+                    model=self.model_name,
+                    messages=messages,
+                    stream=True,
+                    **params,
+                )
+            except Exception as exc:
+                if self._drop_unsupported_param(params, str(exc)):
+                    continue
                 self._log_ai_error(
                     request_id,
                     messages,
@@ -276,15 +365,32 @@ class OpenAIUtil:
                     raw_chunks,
                     exc,
                 )
-                raise AppError(f"模型调用失败: {exc}", status_code=502) from exc
+                raise classify_llm_error(exc) from exc
 
+        finish_reason: str | None = None
         try:
             async for chunk in stream:
-                raw_chunks.append(self._dump_chunk(chunk))
-                if not chunk.choices:
+                if keep_raw:
+                    raw_chunks.append(self._dump_chunk(chunk))
+                usage = getattr(chunk, "usage", None)
+                if usage is not None and info is not None:
+                    info.prompt_tokens = int(getattr(usage, "prompt_tokens", 0) or 0)
+                    info.completion_tokens = int(getattr(usage, "completion_tokens", 0) or 0)
+                    details = getattr(usage, "prompt_tokens_details", None)
+                    info.cached_tokens = int(
+                        getattr(details, "cached_tokens", 0)
+                        or getattr(usage, "prompt_cache_hit_tokens", 0)
+                        or 0
+                    )
+                choices = getattr(chunk, "choices", None)
+                if not choices:
                     continue
-                content = chunk.choices[0].delta.content
-                if content is not None:
+                choice = choices[0]
+                if getattr(choice, "finish_reason", None):
+                    finish_reason = choice.finish_reason
+                delta = getattr(choice, "delta", None)
+                content = getattr(delta, "content", None) if delta is not None else None
+                if content:
                     parts.append(content)
                     yield content
         except Exception as exc:
@@ -297,7 +403,17 @@ class OpenAIUtil:
                 raw_chunks,
                 exc,
             )
-            raise AppError(f"模型调用失败: {exc}", status_code=502) from exc
+            raise classify_llm_error(exc, partial=bool(parts)) from exc
+        finally:
+            # 调用方提前退出或被取消时，立刻关掉连接，别让服务端继续生成
+            try:
+                await stream.close()
+            except Exception:
+                pass
+
+        if info is not None:
+            info.finish_reason = finish_reason
+            info.chars = sum(len(part) for part in parts)
 
         self._log_ai_response(request_id, "".join(parts))
         self._log_ai_raw_response(request_id, raw_chunks, "".join(parts))
@@ -307,6 +423,8 @@ class OpenAIUtil:
         messages: list[dict[str, str]],
         temperature: float = 0.7,
         response_format: dict | None = None,
+        max_tokens: int | None = None,
+        info: StreamInfo | None = None,
     ) -> str:
         """收集流式输出并拼接为完整文本。"""
         parts: list[str] = []
@@ -314,6 +432,8 @@ class OpenAIUtil:
             messages,
             temperature=temperature,
             response_format=response_format,
+            max_tokens=max_tokens,
+            info=info,
         ):
             parts.append(chunk)
         return "".join(parts)

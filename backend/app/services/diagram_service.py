@@ -295,6 +295,12 @@ class DiagramService:
         from ..utils.openai_util import OpenAIUtil
 
         self.ai = ai or OpenAIUtil()
+        self.errors: List[str] = []
+        """各章没画成的原因（给导出结果做说明；不影响导出本身）。"""
+
+    def _note_error(self, chapter_title: str, exc: BaseException) -> None:
+        message = getattr(exc, "friendly", None) or getattr(exc, "message", None) or str(exc)
+        self.errors.append(f"「{chapter_title}」：{str(message)[:160]}")
 
     async def generate_for_chapter(
         self,
@@ -345,6 +351,7 @@ class DiagramService:
             )
         except Exception as exc:
             logger.warning("配图决策失败（章节：%s）：%s", chapter_title, exc)
+            self._note_error(chapter_title, exc)
             return None
 
         if not decision.get("need"):
@@ -357,6 +364,7 @@ class DiagramService:
         # 模板类引擎(layered/blocks/flow)：单独再发一次结构化 spec 生成请求
         if engine in spec_engines:
             spec_builder, spec_validator, default_type = spec_engines[engine]
+            last_exc: Optional[BaseException] = None
             for attempt in range(2):
                 try:
                     spec = await self.ai.collect_json_response(
@@ -372,7 +380,8 @@ class DiagramService:
                         failure_message=f"{default_type} spec 无效",
                     )
                     spec_json = _json.dumps(spec, ensure_ascii=False)
-                    png = DiagramRenderer.render(engine, spec_json)
+                    # 渲染要启动浏览器截图，耗时数秒：放进线程，别卡住整个服务
+                    png = await asyncio.to_thread(DiagramRenderer.render, engine, spec_json)
                     return {
                         "engine": engine,
                         "diagram_type": diagram_type or default_type,
@@ -381,9 +390,12 @@ class DiagramService:
                         "png": png,
                     }
                 except Exception as exc:
+                    last_exc = exc
                     logger.info("%s生成失败(第%s次，章节：%s)：%s",
                                 default_type, attempt + 1, chapter_title, str(exc)[:200])
             logger.warning("章节「%s」%s多次失败，已跳过", chapter_title, default_type)
+            if last_exc is not None:
+                self._note_error(chapter_title, last_exc)
             return None
 
         code = strip_code_fence(str(decision.get("code") or ""))
@@ -391,7 +403,7 @@ class DiagramService:
         last_err = ""
         for attempt in range(DIAGRAM_FIX_ROUNDS + 1):
             try:
-                png = DiagramRenderer.render(engine, code)
+                png = await asyncio.to_thread(DiagramRenderer.render, engine, code)
                 return {
                     "engine": engine,
                     "diagram_type": diagram_type,
@@ -415,6 +427,8 @@ class DiagramService:
                     break
 
         logger.warning("章节「%s」配图多次渲染失败，已跳过：%s", chapter_title, last_err[:200])
+        if last_err:
+            self.errors.append(f"「{chapter_title}」：渲染失败（{last_err[:160]}）")
         return None
 
 
@@ -430,6 +444,7 @@ async def attach_diagrams_to_outline(
     ai=None,
     max_diagrams: int = MAX_DIAGRAMS_PER_DOC,
     concurrency: int = DIAGRAM_CONCURRENCY,
+    errors: Optional[List[str]] = None,
 ) -> int:
     """为导出用 outline（WordExportOutlineItem 列表）的叶子章节生成并附加配图。
 
@@ -475,4 +490,6 @@ async def attach_diagrams_to_outline(
                 count += 1
 
     await asyncio.gather(*[_one(l) for l in leaves], return_exceptions=True)
+    if errors is not None:
+        errors.extend(svc.errors)
     return count

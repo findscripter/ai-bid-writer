@@ -48,7 +48,15 @@ def cleanup_server():
             print("服务器已设置关闭标志")
         except:
             pass
-    
+
+    # 先等服务线程自己退出：AppServer 会把进行中的任务记成“被中断”、写好已生成的内容；
+    # 等不到再走下面的强制结束（服务跑在本进程的线程里，强制结束的就是本进程）
+    if server_thread is not None and server_thread.is_alive() and server_thread is not threading.current_thread():
+        server_thread.join(timeout=8)
+        if not server_thread.is_alive():
+            print("服务器已关闭")
+            return
+
     # 强制终止占用8000端口的进程
     try:
         import subprocess
@@ -108,9 +116,11 @@ def main():
                     print(f"Python路径: {sys.path[:3]}")
                     raise ie
                 
-                # 创建uvicorn配置
-                config = uvicorn.Config(app, host="127.0.0.1", port=8000, log_level="warning")
-                uvicorn_server = uvicorn.Server(config)
+                from app.server import AppServer
+
+                # 创建uvicorn配置；AppServer 退出时先取消后台任务，页面上的任务事件流随之结束
+                config = uvicorn.Config(app, host="127.0.0.1", port=8000, log_level="warning", timeout_graceful_shutdown=3)
+                uvicorn_server = AppServer(config)
                 
                 # 运行服务器
                 uvicorn_server.run()
