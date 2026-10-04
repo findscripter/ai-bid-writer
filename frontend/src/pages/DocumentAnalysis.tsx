@@ -27,7 +27,7 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<{ type: 'success' | 'warning' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamFlushTimerRef = useRef<number | null>(null);
   const pendingStreamingRef = useRef({ overview: '', requirements: '' });
@@ -141,7 +141,9 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
         // 注意：这会同时清掉之前保存的草稿/正文内容缓存等
         draftStorage.clearAll();
         onFileUpload(response.data.file_content);
-        setMessage({ type: 'success', text: response.data.message });
+        // 上传成功但抽取时发现了问题（例如内容过少、部分页面没有文字）：用提醒样式，别让人忽略
+        const hasNotice = response.data.message.includes('但请注意');
+        setMessage({ type: hasNotice ? 'warning' : 'success', text: response.data.message });
       } else {
         setMessage({ type: 'error', text: response.data.message });
       }
@@ -455,7 +457,9 @@ const DocumentAnalysis: React.FC<DocumentAnalysisProps> = ({
       {/* 消息提示 */}
       {message && (
         <div className={`p-4 rounded-md ${
-          message.type === 'success' 
+          message.type === 'warning'
+            ? 'bg-amber-50 text-amber-800 border border-amber-200'
+            : message.type === 'success'
             ? 'bg-green-100 text-green-700 border border-green-200' 
             : 'bg-red-100 text-red-700 border border-red-200'
         }`}>

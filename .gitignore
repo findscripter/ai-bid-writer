@@ -64,6 +64,8 @@ downloads/
 eggs/
 .eggs/
 lib/
+# 前端源码里的 lib 目录（路由、格式化等工具代码）不是 Python 打包产物
+!frontend/src/lib/
 lib64/
 parts/
 sdist/

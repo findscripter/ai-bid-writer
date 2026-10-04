@@ -4,7 +4,9 @@
 import axios from 'axios';
 import { ConfigData, OutlineData, OutlineItem, OutlineMode } from '../types';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+// 生产构建由后端同端口托管，走同源（换端口也不用改）；开发服务器默认连本机 8000
+const API_BASE_URL =
+  process.env.REACT_APP_API_URL || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:8000');
 
 const api = axios.create({
   baseURL: API_BASE_URL,

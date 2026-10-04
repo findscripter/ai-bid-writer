@@ -514,7 +514,7 @@ const OutlineEdit: React.FC<OutlineEditProps> = ({
             <input
               type="file"
               id="expand-file-upload"
-              accept=".pdf,.doc,.docx"
+              accept=".pdf,.docx"
               onChange={handleExpandUpload}
               className="hidden"
               disabled={uploadedExpand}
