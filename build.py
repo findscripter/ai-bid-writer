@@ -131,6 +131,19 @@ def build_frontend():
     return True
 
 
+# 打进 exe 的后端目录里不能带这些：日志（开过文件日志时含招标内容和模型请求原文）、
+# 本机的 .env 配置、测试与缓存
+BUNDLE_EXCLUDE = ("logs", ".env", "tests", "__pycache__", ".pytest_cache", "*.pyc", "*.log")
+
+
+def stage_backend(source=Path("backend"), target=Path("build") / "bundle" / "backend"):
+    """把后端复制一份干净的，用来打包（前端产物 static、插图工具照常带上）。返回复制出的目录。"""
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.copytree(source, target, ignore=shutil.ignore_patterns(*BUNDLE_EXCLUDE))
+    return target
+
+
 def build_exe():
     """构建exe文件"""
     print("=" * 50)
@@ -148,10 +161,13 @@ def build_exe():
         print("安装应用依赖失败")
         return False
 
+    bundle = stage_backend()
+    print(f"已准备打包用的后端目录（不含日志、.env、测试）: {bundle}")
+
     # 构建exe - 使用更详细的参数，增加进程管理相关导入
     pyinstaller_cmd = (
         'pyinstaller --onefile --name="ai-bid-writer" '
-        '--add-data="backend;backend" '
+        f'--add-data="{bundle};backend" '
         "--hidden-import=uvicorn --hidden-import=uvicorn.logging --hidden-import=uvicorn.loops "
         "--hidden-import=uvicorn.loops.auto --hidden-import=uvicorn.protocols "
         "--hidden-import=uvicorn.protocols.http --hidden-import=uvicorn.protocols.http.auto "
@@ -162,7 +178,8 @@ def build_exe():
         "--hidden-import=fastapi.exceptions --hidden-import=starlette --hidden-import=starlette.middleware "
         "--hidden-import=starlette.middleware.cors --hidden-import=starlette.applications "
         "--hidden-import=starlette.routing --hidden-import=starlette.responses --hidden-import=starlette.staticfiles "
-        "--hidden-import=starlette.types --hidden-import=openai --hidden-import=docx --hidden-import=docx.oxml "
+        "--hidden-import=starlette.types --hidden-import=starlette.middleware.trustedhost "
+        "--hidden-import=httpx --hidden-import=PIL --hidden-import=aiohttp --hidden-import=pdfminer.pdfdocument --hidden-import=openai --hidden-import=docx --hidden-import=docx.oxml "
         "--hidden-import=docx.oxml.ns --hidden-import=PyPDF2 --hidden-import=PyPDF2.generic "
         "--hidden-import=pdfplumber --hidden-import=pdfplumber.page --hidden-import=pdfplumber.table "
         "--hidden-import=pdfplumber.utils --hidden-import=fitz --hidden-import=pymupdf "

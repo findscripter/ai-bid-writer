@@ -1,14 +1,24 @@
 """后端服务启动脚本"""
-import uvicorn
 import os
 import sys
 
 if __name__ == "__main__":
     # 确保在正确的目录中运行
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
-    from app.server import AppServer
 
-    # 端口默认 8000，可用环境变量 AI_BID_PORT 调整（改了端口要同时在 .env 的 CORS_ORIGINS 里放行）
+    # 用错了 Python（没装依赖）是最常见的启动失败：直接说清楚怎么办，不只丢一段回溯
+    try:
+        import uvicorn
+
+        from app.server import AppServer
+    except ModuleNotFoundError as exc:
+        print(f"缺少依赖 {exc.name}：这个 Python（{sys.executable}）还没有安装本项目的依赖。")
+        print("请运行 pip install -r backend/requirements.txt；")
+        print("电脑上有多个 Python 时，用环境变量 AI_BID_PYTHON 指定装了依赖的那个。")
+        sys.exit(1)
+
+    # 端口默认 8000，可用环境变量 AI_BID_PORT 调整。单端口方式下页面和接口同源，改了端口不用改别的；
+    # 用前端开发服务器时，把 frontend/.env 里的 REACT_APP_API_URL 指向新端口
     try:
         port = int(os.environ.get("AI_BID_PORT", "8000"))
     except ValueError:
@@ -35,6 +45,11 @@ if __name__ == "__main__":
         server.run()
     except KeyboardInterrupt:
         pass
+    except SystemExit:
+        # 端口绑定失败时 uvicorn 自己以 1 退出（错误已经打印在上面）
+        if not server.started:
+            print(f"端口 {port} 可能被别的程序占用了：设置环境变量 AI_BID_PORT（例如 8001）后再启动。")
+        raise
     if not server.started:
-        # 与 uvicorn.run 一致：没能启动（例如端口被占用）时以非零状态退出
+        # 其他原因没能启动（原因见上面的日志）：以非零状态退出
         sys.exit(3)
