@@ -1,0 +1,4 @@
+# Windows 批处理文件必须用 CRLF 换行：用 LF 换行时，cmd 会把含中文的行解析错乱，脚本直接跑不起来
+# （例如从 GitHub 下载 ZIP、或者 core.autocrlf=false 时检出的副本）。
+*.bat text eol=crlf
+*.cmd text eol=crlf

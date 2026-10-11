@@ -7,7 +7,6 @@ PyPDF2==3.0.1
 pydantic==2.11.7
 pydantic-settings==2.10.1
 python-dotenv==1.1.1
-aiofiles==24.1.0
 # 版本兼容性（放宽范围给依赖解析）
 anyio>=4,<5
 # 新增的文档处理库
@@ -16,3 +15,5 @@ pymupdf==1.26.4
 docx2python==3.5.0
 aiohttp==3.10.11
 Pillow==10.4.0
+# openai SDK 本身依赖 httpx；这里的代码也直接用到它（超时与错误分类）
+httpx>=0.27,<1

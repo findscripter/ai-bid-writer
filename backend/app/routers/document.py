@@ -1,5 +1,6 @@
 """文档处理相关 API 路由。"""
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
@@ -38,22 +39,31 @@ def _find_empty_leaves(items: list[WordExportOutlineItem]) -> list[str]:
 
 @router.post("/upload", response_model=FileUploadResponse)
 async def upload_file(file: UploadFile = File(...)):
-    """上传文档文件并提取文本内容。"""
-    try:
-        if not FileService.is_supported_document(file.content_type):
-            return FileUploadResponse(
-                success=False, message="不支持的文件类型，请上传PDF或Word文档"
-            )
+    """上传文档文件并提取文本内容。
 
-        file_content = await FileService.process_uploaded_file(file)
-        return FileUploadResponse(
-            success=True,
-            message=f"文件 {file.filename} 上传成功",
-            file_content=file_content,
-        )
-    except Exception as exc:
+    失败时同样返回 HTTP 200，用 success=False 加 message 说明原因（前端按这个约定展示）。
+    """
+    try:
+        document = await FileService.extract_document(file)
+    except AppError as exc:
+        return FileUploadResponse(success=False, message=exc.message)
+    except Exception:
         logger.exception("文件上传失败")
-        return FileUploadResponse(success=False, message=f"文件处理失败: {exc}")
+        return FileUploadResponse(
+            success=False,
+            message="文件处理失败：读取文件时出现了意外错误。请确认文件能正常打开后重试。",
+        )
+
+    notice = "".join(document.warnings)
+    if not document.text:
+        # 一个字都没抽到，后面的解析无从谈起：按失败返回，原因就是那条提示
+        return FileUploadResponse(
+            success=False, message=notice or "没有从文件中提取到任何文字。"
+        )
+    message = f"文件 {document.filename} 上传成功"
+    if notice:
+        message += f"，但请注意：{notice}"
+    return FileUploadResponse(success=True, message=message, file_content=document.text)
 
 
 @router.post("/analyze-stream")
@@ -117,7 +127,8 @@ async def export_word(request: WordExportRequest):
                 # 配图失败不应阻断导出
                 logger.exception("自动配图失败，将导出无图版本")
 
-        buffer, headers = WordExportService.export_outline(
+        buffer, headers = await asyncio.to_thread(
+            WordExportService.export_outline,
             request,
             copy_index=request.copy_index,
             persona_name=request.persona_name,

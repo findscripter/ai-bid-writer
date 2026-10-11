@@ -251,3 +251,7 @@ class WordExportRequest(BaseModel):
         None,
         description="专门用于生成插图的模型ID（留空则用全局配置模型）；插图对模型能力较敏感，建议用较强模型",
     )
+    include_toc: bool = Field(
+        False,
+        description="为 True 时在正文前插入「目录」标题和 TOC 域（在 Word 里更新域即可生成目录）；仅对单份导出（copy_index 为空）生效",
+    )

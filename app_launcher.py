@@ -48,23 +48,33 @@ def cleanup_server():
             print("服务器已设置关闭标志")
         except:
             pass
-    
-    # 强制终止占用8000端口的进程
+
+    # 先等服务线程自己退出：AppServer 会把进行中的任务记成“被中断”、写好已生成的内容；
+    # 等不到再走下面的强制结束（服务跑在本进程的线程里，强制结束的就是本进程）
+    if server_thread is not None and server_thread.is_alive() and server_thread is not threading.current_thread():
+        server_thread.join(timeout=8)
+        if not server_thread.is_alive():
+            print("服务器已关闭")
+            return
+
+    # 服务没能按时退出：强制结束占着 8000 端口的本进程。
+    # 只认本进程——服务没起来时（例如端口原本就被别的程序占着），占着端口的是别人，不能动它
     try:
         import subprocess
-        # 查找占用8000端口的进程
         result = subprocess.run(['netstat', '-ano'], capture_output=True, text=True)
         for line in result.stdout.split('\n'):
-            if ':8000' in line and 'LISTENING' in line:
-                parts = line.split()
-                if len(parts) >= 5:
-                    pid = parts[-1]
-                    try:
-                        subprocess.run(['taskkill', '/F', '/PID', pid], 
-                                     capture_output=True, check=True)
-                        print(f"已终止占用8000端口的进程 PID: {pid}")
-                    except:
-                        pass
+            parts = line.split()
+            # 列：协议 本地地址 外部地址 状态 PID
+            if len(parts) >= 5 and parts[1].endswith(':8000') and parts[3] == 'LISTENING':
+                pid = parts[-1]
+                if pid != str(os.getpid()):
+                    continue
+                try:
+                    subprocess.run(['taskkill', '/F', '/PID', pid],
+                                 capture_output=True, check=True)
+                    print(f"已终止占用8000端口的进程 PID: {pid}")
+                except:
+                    pass
     except:
         pass
 
@@ -108,9 +118,11 @@ def main():
                     print(f"Python路径: {sys.path[:3]}")
                     raise ie
                 
-                # 创建uvicorn配置
-                config = uvicorn.Config(app, host="127.0.0.1", port=8000, log_level="warning")
-                uvicorn_server = uvicorn.Server(config)
+                from app.server import AppServer
+
+                # 创建uvicorn配置；AppServer 退出时先取消后台任务，页面上的任务事件流随之结束
+                config = uvicorn.Config(app, host="127.0.0.1", port=8000, log_level="warning", timeout_graceful_shutdown=3)
+                uvicorn_server = AppServer(config)
                 
                 # 运行服务器
                 uvicorn_server.run()

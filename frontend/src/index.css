@@ -4,33 +4,335 @@
 
 body {
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-family: theme('fontFamily.sans');
+  /* 界面字号以 14px 为基准；文稿正文另用 .doc-prose / text-doc（15px、行高 1.9） */
+  font-size: 14px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  /* 沉稳商务：slate 灰底 + slate 文字 */
-  background-color: #f1f5f9; /* slate-100 */
-  color: #0f172a; /* slate-900 */
+  text-rendering: optimizeLegibility;
+  /* 沉静：浅冷灰画布 + 近黑文字，白色的面靠细边框分层 */
+  background-color: theme('colors.canvas');
+  color: theme('colors.ink.900');
 }
 
-/* 更精致的滚动条（与 slate 主题统一） */
+/* 统一的细滚动条 */
 *::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1; /* slate-300 */
+  background-color: theme('colors.line.strong');
   border-radius: 9999px;
 }
 *::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8; /* slate-400 */
+  background-color: theme('colors.ink.400');
 }
 *::-webkit-scrollbar-track {
   background-color: transparent;
 }
+*::-webkit-scrollbar-corner {
+  background-color: transparent;
+}
+/* 标准属性只给不支持 ::-webkit-scrollbar 的浏览器（Firefox）；
+   Chromium 一旦识别到标准属性就会忽略上面的圆角细滚动条 */
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.line.strong') transparent;
+  }
+}
 
 code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+  font-family: theme('fontFamily.mono');
+}
+
+@layer base {
+  ::selection {
+    background-color: theme('colors.primary.100');
+  }
+
+  /* 统一的键盘焦点：2px 主色描边；鼠标点击不出现 */
+  :focus-visible {
+    outline: 2px solid theme('colors.primary.500');
+    outline-offset: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* @tailwindcss/forms 的默认焦点色是它自带的蓝，这里统一成主色（表单控件用边框 + 光环表示焦点） */
+  [type='text']:focus,
+  input:where(:not([type])):focus,
+  [type='email']:focus,
+  [type='url']:focus,
+  [type='password']:focus,
+  [type='number']:focus,
+  [type='date']:focus,
+  [type='datetime-local']:focus,
+  [type='month']:focus,
+  [type='search']:focus,
+  [type='tel']:focus,
+  [type='time']:focus,
+  [type='week']:focus,
+  [multiple]:focus,
+  textarea:focus,
+  select:focus {
+    --tw-ring-color: theme('colors.primary.500');
+    border-color: theme('colors.primary.500');
+  }
+  [type='checkbox']:focus,
+  [type='radio']:focus {
+    --tw-ring-color: theme('colors.primary.500');
+  }
+}
+
+@layer components {
+  /* ---------- 文稿排版：MarkdownView 的容器类，也可直接套在任何富文本容器上 ---------- */
+  .doc-prose {
+    font-size: 15px;
+    line-height: 1.9;
+    color: theme('colors.ink.900');
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+  .doc-prose > :first-child {
+    margin-top: 0;
+  }
+  .doc-prose > :last-child {
+    margin-bottom: 0;
+  }
+
+  .doc-prose p {
+    margin: 0 0 0.85em;
+  }
+
+  .doc-prose h1,
+  .doc-prose h2,
+  .doc-prose h3,
+  .doc-prose h4,
+  .doc-prose h5,
+  .doc-prose h6 {
+    color: theme('colors.ink.900');
+    font-weight: 600;
+    line-height: 1.45;
+    margin: 1.5em 0 0.6em;
+  }
+  .doc-prose h1 {
+    font-size: 1.4em;
+  }
+  .doc-prose h2 {
+    font-size: 1.22em;
+  }
+  .doc-prose h3 {
+    font-size: 1.08em;
+  }
+  .doc-prose h4,
+  .doc-prose h5,
+  .doc-prose h6 {
+    font-size: 1em;
+  }
+  .doc-prose h5,
+  .doc-prose h6 {
+    color: theme('colors.ink.700');
+  }
+
+  .doc-prose strong {
+    font-weight: 600;
+  }
+  .doc-prose em {
+    font-style: italic;
+  }
+  .doc-prose del {
+    color: theme('colors.ink.500');
+  }
+  .doc-prose a {
+    color: theme('colors.primary.600');
+    text-decoration: underline;
+    text-decoration-color: theme('colors.primary.200');
+    text-underline-offset: 3px;
+  }
+  .doc-prose a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .doc-prose ul,
+  .doc-prose ol {
+    margin: 0 0 0.85em;
+    padding-left: 1.7em;
+  }
+  .doc-prose ul {
+    list-style: disc;
+  }
+  .doc-prose ol {
+    list-style: decimal;
+  }
+  .doc-prose ul ul {
+    list-style: circle;
+  }
+  .doc-prose ul ul ul {
+    list-style: square;
+  }
+  .doc-prose ol ol {
+    list-style: lower-alpha;
+  }
+  .doc-prose ol ol ol {
+    list-style: lower-roman;
+  }
+  .doc-prose li {
+    margin: 0.15em 0;
+  }
+  .doc-prose li::marker {
+    color: theme('colors.ink.500');
+  }
+  .doc-prose li > p {
+    margin: 0.25em 0;
+  }
+  .doc-prose li > ul,
+  .doc-prose li > ol {
+    margin: 0.15em 0;
+  }
+
+  .doc-prose blockquote {
+    margin: 0 0 0.85em;
+    padding: 0.1em 0 0.1em 1em;
+    border-left: 3px solid theme('colors.line.strong');
+    color: theme('colors.ink.600');
+  }
+  .doc-prose blockquote > :last-child {
+    margin-bottom: 0;
+  }
+
+  .doc-prose hr {
+    border: 0;
+    border-top: 1px solid theme('colors.line.DEFAULT');
+    margin: 1.6em 0;
+  }
+
+  .doc-prose code {
+    font-family: theme('fontFamily.mono');
+    font-size: 0.875em;
+    padding: 0.1em 0.35em;
+    border: 1px solid theme('colors.line.DEFAULT');
+    border-radius: 4px;
+    background-color: theme('colors.canvas');
+    color: theme('colors.ink.700');
+  }
+  .doc-prose pre {
+    margin: 0 0 1em;
+    padding: 0.8em 1em;
+    overflow-x: auto;
+    border: 1px solid theme('colors.line.DEFAULT');
+    border-radius: 8px;
+    background-color: theme('colors.subtle');
+    font-size: 13px;
+    line-height: 1.65;
+  }
+  .doc-prose pre code {
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: none;
+    font-size: inherit;
+    color: theme('colors.ink.900');
+    white-space: pre;
+  }
+
+  /* 表格：细边框 + 表头底色；外层 .doc-table 负责横向滚动，宽表不撑破版心 */
+  .doc-prose .doc-table {
+    margin: 0 0 1em;
+    overflow-x: auto;
+  }
+  .doc-prose table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.93em;
+    line-height: 1.65;
+  }
+  .doc-prose th,
+  .doc-prose td {
+    padding: 0.45em 0.75em;
+    border: 1px solid theme('colors.line.DEFAULT');
+    text-align: left;
+    vertical-align: top;
+  }
+  .doc-prose thead th {
+    background-color: theme('colors.subtle');
+    color: theme('colors.ink.700');
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .doc-prose tbody tr:hover td {
+    background-color: theme('colors.subtle');
+  }
+
+  /* Markdown 里的图片不加载外链，只显示占位说明 */
+  .doc-prose .doc-image {
+    display: inline-block;
+    padding: 0 0.5em;
+    border: 1px dashed theme('colors.line.strong');
+    border-radius: 4px;
+    color: theme('colors.ink.500');
+    font-size: 0.875em;
+  }
+
+  /* 紧凑变体：侧栏里的计划、问题、解读摘要 */
+  .doc-prose.doc-prose-compact {
+    font-size: 13px;
+    line-height: 1.7;
+    color: theme('colors.ink.700');
+  }
+  .doc-prose.doc-prose-compact p,
+  .doc-prose.doc-prose-compact ul,
+  .doc-prose.doc-prose-compact ol,
+  .doc-prose.doc-prose-compact blockquote {
+    margin-bottom: 0.6em;
+  }
+  .doc-prose.doc-prose-compact h1,
+  .doc-prose.doc-prose-compact h2,
+  .doc-prose.doc-prose-compact h3,
+  .doc-prose.doc-prose-compact h4,
+  .doc-prose.doc-prose-compact h5,
+  .doc-prose.doc-prose-compact h6 {
+    margin: 1.1em 0 0.4em;
+  }
+  .doc-prose.doc-prose-compact h1 {
+    font-size: 1.2em;
+  }
+  .doc-prose.doc-prose-compact h2 {
+    font-size: 1.1em;
+  }
+  .doc-prose.doc-prose-compact h3 {
+    font-size: 1em;
+  }
+  .doc-prose.doc-prose-compact pre {
+    font-size: 12px;
+    padding: 0.6em 0.8em;
+  }
+  .doc-prose.doc-prose-compact th,
+  .doc-prose.doc-prose-compact td {
+    padding: 0.3em 0.55em;
+  }
+
+  /* 流式输出时跟在最后一个字后面的光标 */
+  .doc-cursor {
+    display: inline-block;
+    width: 2px;
+    height: 1.05em;
+    margin-left: 2px;
+    vertical-align: -0.15em;
+    border-radius: 1px;
+    background-color: theme('colors.primary.500');
+    @apply animate-caret-blink;
+  }
+}
+
+/* 装饰性动画对「减少动态效果」的用户停用；加载转圈等功能性动画保留 */
+@media (prefers-reduced-motion: reduce) {
+  .doc-cursor,
+  .animate-breathe,
+  .animate-indeterminate,
+  .animate-toast-in {
+    animation: none;
+  }
 }

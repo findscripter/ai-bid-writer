@@ -1,46 +1,41 @@
-# Getting Started with Create React App
+# 前端
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+React 19 + TypeScript + Tailwind，Create React App 脚手架。
 
-## Available Scripts
+```bat
+npm install
+npm start        :: 开发服务器 http://localhost:3000 ，接口请求打到 http://localhost:8000
+npm run build    :: 生产构建，输出到 build/
+```
 
-In the project directory, you can run:
+把 `.env.example` 复制成 `.env` 后，开发服务器改用其中的 `PORT=3002`（后端放行了本机 3000~3004 端口，不影响使用）。
 
-### `npm start`
+日常使用不需要单独构建：在仓库根目录运行 `python build_frontend.py`（或直接 `single_port.bat`），会构建并复制到 `backend/static`，由后端同端口托管。
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## 目录
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+```
+src/
+├── App.tsx            # 入口：按地址栏 hash 分发页面
+├── api/               # 后端接口封装（client.ts）与数据类型（types.ts）
+├── app/               # 应用外壳（顶栏）、模型服务设置
+├── lib/               # hash 路由、Markdown 渲染、格式化函数
+├── ui/                # 基础组件（Button、Modal、Tabs…），Gallery.tsx 是视觉验收页（没有接入路由，需要时在入口临时渲染）
+├── projects/          # 项目列表
+├── workspace/         # 项目工作台
+│   ├── WorkspaceContext.tsx   # 状态中心：项目数据 + 后台任务事件流
+│   ├── ProjectWorkspace.tsx   # 阶段导航与任务状态条
+│   ├── dismissedJobs.ts       # 关掉过的“任务被中断 / 失败”提示（各页面共用）
+│   ├── stages/                # 招标解读 / 目录 / 写作计划 / 正文 / 审校 / 导出
+│   ├── tender/、outline/、plan/、review/   # 对应阶段页用到的组件
+│   └── write/                 # 正文页的章节树、文稿区、侧栏
+└── classic/、pages/、components/、hooks/、services/、types/、utils/   # 经典模式（原三步向导）
+```
 
-### `npm test`
+## 约定
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
-
-### `npm run build`
-
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+- 数据以后端为准：项目工作台的页面不在浏览器里保存稿件（localStorage 只存界面偏好，例如导出选项、关掉过的提示；经典模式的草稿除外）。修改项目数据的接口大多返回完整的项目状态，交给 `ws.apply(state)`；保存或恢复单章返回这一章，交给 `ws.setChapter`；审校接口返回审校结果，交给 `ws.setReview`。
+- 整份项目状态带服务端的快照时刻 `state_at`：晚到的旧响应不会把更新的数据换回去（见 `WorkspaceContext.tsx` 里的 `mergeState`）。
+- 长时间运行的操作（规划、撰写、修订、深度审校）是后端的后台任务，页面通过事件流（SSE）跟随；刷新或断线后从快照的序号续传。
+- `tsconfig` 的编译目标是 es5：不要对 Set / Map 直接用展开或 `for...of`。
+- 环境变量 `REACT_APP_API_URL` 可以指定后端地址；不设时开发模式连 `http://localhost:8000`，生产构建走同源。
