@@ -16,6 +16,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { Cog6ToothIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { api } from '../api/client';
 import type { AppMeta, AppSettings } from '../api/types';
+import { LogoMark } from '../brand/BrandArt';
 import { Link } from '../lib/router';
 import { Badge, Button, IconButton, Tooltip } from '../ui';
 import SettingsDrawer from './SettingsDrawer';
@@ -34,19 +35,6 @@ export function useAppShell(): AppShellValue {
   const value = useContext(AppShellContext);
   if (!value) throw new Error('useAppShell 必须在 AppShell 里使用');
   return value;
-}
-
-function LogoMark() {
-  return (
-    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-ink-900">
-      <svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M14 3v4a1 1 0 0 0 1 1h4" />
-        <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
-        <path d="M9 13h6" stroke="#90B0FF" />
-        <path d="M9 17h4" stroke="#90B0FF" />
-      </svg>
-    </span>
-  );
 }
 
 interface AppShellProps {
@@ -168,7 +156,7 @@ export function AppShell({ breadcrumb, children }: AppShellProps) {
     <div className="flex h-screen flex-col overflow-hidden bg-canvas text-ink-900">
       <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-white px-4">
         <Link to="/" className="flex items-center gap-2 rounded-md pr-1 text-ink-900 hover:opacity-80">
-          <LogoMark />
+          <LogoMark size={28} className="shrink-0" />
           <span className="text-[15px] font-semibold tracking-tight">AI写标书助手</span>
         </Link>
         <div className="flex min-w-0 flex-1 items-center gap-2 text-sm text-ink-500">{breadcrumb}</div>

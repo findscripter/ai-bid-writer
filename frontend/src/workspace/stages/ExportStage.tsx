@@ -562,7 +562,7 @@ export default function ExportStage() {
                   onChange={setWithDiagrams}
                   disabled={exporting}
                   title="自动插入技术插图"
-                  hint="导出时由模型为合适的章节生成架构图、流程图。会调用模型，耗时较长；需要本机装有 Chrome，时序图和组织架构图还需要 mermaid-cli 和 Java。"
+                  hint="导出时由模型为合适的章节生成架构图、流程图。会调用模型，耗时较长；需要本机装有 Chrome 或 Edge，时序图和组织架构图还需要 mermaid-cli 和 Java。"
                 >
                   {withDiagrams && (
                     <div className="mt-3 pl-6">

@@ -19,6 +19,7 @@ src/
 ├── App.tsx            # 入口：按地址栏 hash 分发页面
 ├── api/               # 后端接口封装（client.ts）与数据类型（types.ts）
 ├── app/               # 应用外壳（顶栏）、模型服务设置
+├── brand/             # 标志与动画（只依赖 React，样式写在 SVG 自带的 <style> 里）
 ├── lib/               # hash 路由、Markdown 渲染、格式化函数
 ├── ui/                # 基础组件（Button、Modal、Tabs…），Gallery.tsx 是视觉验收页（没有接入路由，需要时在入口临时渲染）
 ├── projects/          # 项目列表

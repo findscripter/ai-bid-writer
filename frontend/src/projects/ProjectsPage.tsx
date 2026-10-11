@@ -7,7 +7,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowUpTrayIcon,
-  DocumentTextIcon,
   ExclamationTriangleIcon,
   ListBulletIcon,
   PencilSquareIcon,
@@ -17,6 +16,7 @@ import {
 import { api, errorMessage } from '../api/client';
 import type { ProjectState, ProjectSummary } from '../api/types';
 import { useAppShell } from '../app/AppShell';
+import { AnimatedLogo } from '../brand/BrandArt';
 import { navigate } from '../lib/router';
 import { Button, EmptyState, useConfirm, useToast } from '../ui';
 import { ProjectCard, ProjectCardSkeleton } from './ProjectCard';
@@ -281,10 +281,8 @@ export default function ProjectsPage() {
   } else if (empty) {
     body = (
       <section className="rounded-lg border border-line bg-white px-6 py-12 text-center sm:px-10">
-        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-canvas text-ink-400">
-          <DocumentTextIcon className="h-5 w-5" aria-hidden="true" />
-        </div>
-        <h2 className="mt-3 text-base font-semibold text-ink-900">还没有项目</h2>
+        <AnimatedLogo size={64} className="mx-auto" />
+        <h2 className="mt-4 text-base font-semibold text-ink-900">还没有项目</h2>
         <p className="mt-1 text-[13px] text-ink-500">一个项目对应一份投标技术文件。从招标文件到 Word，分三步：</p>
 
         <ol className="mx-auto mt-7 grid max-w-4xl grid-cols-1 gap-3 text-left md:grid-cols-3">

@@ -1,4 +1,13 @@
-# AI写标书助手
+<p align="center">
+  <picture>
+    <source media="(max-width: 600px) and (prefers-color-scheme: dark)" srcset="docs/brand/hero-compact-dark.svg">
+    <source media="(max-width: 600px)" srcset="docs/brand/hero-compact-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/hero-dark.svg">
+    <img src="docs/brand/hero-light.svg" width="880" alt="AI写标书助手：招标解读、目录、写作计划、正文、审校、导出">
+  </picture>
+</p>
+
+<h1 align="center">AI写标书助手</h1>
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.9+-blue.svg" alt="Python">
@@ -184,6 +193,8 @@ cd ..
 python build_frontend.py --force
 ```
 
+标志和 README 顶部的动画都来自 `frontend/src/brand/BrandArt.tsx`。改了它之后，在 `frontend` 目录下运行 `node scripts/render-brand.js`，重新生成 `docs/brand/*.svg` 和 `frontend/public/favicon.svg`。
+
 ## 项目结构
 
 ```
@@ -202,10 +213,12 @@ ai-bid-writer/
 ├── frontend/                # React + TypeScript + Tailwind
 │   └── src/
 │       ├── api/             # 接口封装与数据类型
+│       ├── brand/           # 标志与动画（React 组件，也用来生成 docs/brand 下的 SVG）
 │       ├── ui/              # 基础组件
 │       ├── projects/        # 项目列表
 │       ├── workspace/       # 项目工作台各阶段页面
 │       └── classic/         # 经典模式入口（页面仍在 pages/、components/ 等原目录）
+├── docs/brand/              # README 顶部的动画（宽屏、窄屏各分深浅两版）与标志，由 frontend/scripts/render-brand.js 生成
 ├── screenshots/
 ├── build_frontend.py        # 构建前端并复制到 backend/static
 ├── single_port.bat          # 单端口启动
